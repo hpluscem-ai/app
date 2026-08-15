@@ -1,28 +1,13 @@
 import { StyleSheet, View } from 'react-native';
 import { Appbar } from 'react-native-paper';
-import Svg, { Path } from 'react-native-svg';
 
-import { iconPaths } from '../constants/assets';
 import { colors, typography } from '../constants/theme';
+import { BackIcon } from './icons/BackIcon';
 
 type AppBarProps = {
   title: string;
   onBack?: () => void;
 };
-
-function BackIcon({ color, size }: { color: string; size: number }) {
-  return (
-    <Svg fill="none" height={size} viewBox="0 0 24 24" width={size}>
-      <Path
-        d={iconPaths.back}
-        stroke={color}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-      />
-    </Svg>
-  );
-}
 
 /** Expo Router Stack 화면에서 공통으로 사용하는 상단 앱바입니다. */
 export function AppBar({ title, onBack }: AppBarProps) {

@@ -9,13 +9,13 @@ import {
   FormProvider,
   useForm,
 } from 'react-hook-form';
-import Svg, { Path } from 'react-native-svg';
 
-import { AuthScreen } from '../components/auth/AuthScreen';
+import { AppScreen } from '../components/AppScreen';
 import { FormTextField } from '../components/auth/FormTextField';
 import { PhoneVerificationSection } from '../components/auth/PhoneVerificationSection';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
-import { iconPaths } from '../constants/assets';
+import { CheckSquareIcon } from '../components/icons/CheckSquareIcon';
+import { ChevronDownIcon } from '../components/icons/ChevronDownIcon';
 import { colors, typography } from '../constants/theme';
 import {
   showKakaoVerificationCheckPendingAlert,
@@ -43,36 +43,6 @@ type SignUpFormValues = {
   privacyTerms: boolean;
   marketingTerms: boolean;
 };
-
-function ChevronDownIcon() {
-  return (
-    <Svg fill="none" height={24} viewBox="0 0 24 24" width={24}>
-      <Path
-        d={iconPaths.chevronDown}
-        stroke={colors.gray800}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        transform="translate(6 8.71)"
-      />
-    </Svg>
-  );
-}
-
-function CheckSquareIcon({ checked }: { checked: boolean }) {
-  return (
-    <Svg fill="none" height={24} viewBox="0 0 24 24" width={24}>
-      <Path
-        d={checked ? iconPaths.checkSquare : iconPaths.checkSquareFrame}
-        stroke={colors.gray800}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        transform="translate(3 3)"
-      />
-    </Svg>
-  );
-}
 
 type AgreementRowProps = {
   checked: boolean;
@@ -133,9 +103,10 @@ export default function SignUpRoute() {
   });
 
   return (
-    <AuthScreen
+    <AppScreen
       contentStyle={styles.authContent}
       title="회원가입"
+      variant="auth"
     >
       <View style={styles.form}>
         <View style={styles.fields}>
@@ -316,7 +287,7 @@ export default function SignUpRoute() {
           onPress={submitForm}
         />
       </View>
-    </AuthScreen>
+    </AppScreen>
   );
 }
 

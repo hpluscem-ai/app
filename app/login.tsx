@@ -10,7 +10,7 @@ import {
   useForm,
 } from 'react-hook-form';
 
-import { AuthScreen } from '../components/auth/AuthScreen';
+import { AppScreen } from '../components/AppScreen';
 import { FormTextField } from '../components/auth/FormTextField';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
 import { colors, typography } from '../constants/theme';
@@ -41,9 +41,10 @@ export default function LoginRoute() {
   const submitForm = handleSubmit(showLoginServerPendingAlert);
 
   return (
-    <AuthScreen
+    <AppScreen
       contentStyle={styles.authContent}
       title="로그인"
+      variant="auth"
     >
       <View style={styles.form}>
         <View style={styles.fields}>
@@ -121,7 +122,7 @@ export default function LoginRoute() {
           </View>
         </View>
       </View>
-    </AuthScreen>
+    </AppScreen>
   );
 }
 

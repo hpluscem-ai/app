@@ -2,12 +2,11 @@ import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 
-import { MainScreen } from '../components/MainScreen';
+import { AppScreen } from '../components/AppScreen';
 import { FormTextField } from '../components/auth/FormTextField';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
-import { iconPaths } from '../constants/assets';
+import { CheckSquareIcon } from '../components/icons/CheckSquareIcon';
 import { colors, typography } from '../constants/theme';
 import {
   showKakaoVerificationCheckPendingAlert,
@@ -32,21 +31,6 @@ type MyPageFormValues = {
 };
 
 const PROFILE_EMAIL = 'nocoders@nocoders.kr';
-
-function CheckSquareIcon({ checked }: { checked: boolean }) {
-  return (
-    <Svg fill="none" height={24} viewBox="0 0 24 24" width={24}>
-      <Path
-        d={checked ? iconPaths.checkSquare : iconPaths.checkSquareFrame}
-        stroke={colors.gray800}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={2}
-        transform="translate(3 3)"
-      />
-    </Svg>
-  );
-}
 
 export default function MyPageRoute() {
   const router = useRouter();
@@ -84,7 +68,7 @@ export default function MyPageRoute() {
   });
 
   return (
-    <MainScreen activeTab="profile">
+    <AppScreen activeTab="profile" variant="main">
       <View style={styles.profileContent}>
         <View style={styles.profileDetails}>
           <View style={styles.fields}>
@@ -235,7 +219,7 @@ export default function MyPageRoute() {
 
         <PrimaryButton label="정보 변경하기" onPress={submitForm} />
       </View>
-    </MainScreen>
+    </AppScreen>
   );
 }
 

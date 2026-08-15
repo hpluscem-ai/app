@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { FormProvider, useForm } from 'react-hook-form';
 
-import { AuthScreen } from '../components/auth/AuthScreen';
+import { AppScreen } from '../components/AppScreen';
 import { PhoneVerificationSection } from '../components/auth/PhoneVerificationSection';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
 import {
@@ -38,9 +38,10 @@ export default function FindEmailRoute() {
   });
 
   return (
-    <AuthScreen
+    <AppScreen
       contentStyle={styles.authContent}
       title="이메일 찾기"
+      variant="auth"
     >
       <View style={styles.form}>
         <FormProvider {...form}>
@@ -52,7 +53,7 @@ export default function FindEmailRoute() {
 
         <PrimaryButton label="이메일 찾기" onPress={submitForm} />
       </View>
-    </AuthScreen>
+    </AppScreen>
   );
 }
 

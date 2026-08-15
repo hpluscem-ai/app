@@ -1,7 +1,7 @@
 import { Controller, FormProvider, useForm } from 'react-hook-form';
 import { StyleSheet, View } from 'react-native';
 
-import { AuthScreen } from '../components/auth/AuthScreen';
+import { AppScreen } from '../components/AppScreen';
 import { FormTextField } from '../components/auth/FormTextField';
 import { PhoneVerificationSection } from '../components/auth/PhoneVerificationSection';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
@@ -49,9 +49,10 @@ export default function FindPasswordRoute() {
   });
 
   return (
-    <AuthScreen
+    <AppScreen
       contentStyle={styles.authContent}
       title="비밀번호 찾기"
+      variant="auth"
     >
       <View style={styles.form}>
         <View style={styles.fields}>
@@ -89,7 +90,7 @@ export default function FindPasswordRoute() {
 
         <PrimaryButton label="비밀번호 찾기" onPress={submitForm} />
       </View>
-    </AuthScreen>
+    </AppScreen>
   );
 }
 

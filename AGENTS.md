@@ -1,13 +1,100 @@
-# Expo HAS CHANGED
+# H Plus Eco App Working Agreement
 
-Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
+이 문서는 저장소의 모든 Codex 세션에 적용되는 기본 작업 규칙이다. 사용자가 현재 대화에서 다르게 지시하면 최신 지시를 우선하고, 합의가 바뀌면 이 문서와 개발 기록을 함께 갱신한다.
+
+## Current Stack
+
+- 이 앱은 WebView가 아닌 React Native 네이티브 UI로 구현한다. 사용자가 명시하지 않는 한 WebView 기반 화면을 추가하지 않는다.
+- Expo 버전의 기준은 `package.json`이다. 현재 SDK 57 코드를 작성하기 전에 반드시 정확한 버전 문서인 https://docs.expo.dev/versions/v57.0.0/ 을 확인한다. SDK를 올릴 때는 이 문서의 링크도 함께 수정한다.
+- 라우팅은 Expo Router의 파일 기반 라우팅과 `Stack`을 사용한다. React Navigation Navigator를 별도로 중복 구성하지 않는다.
+- 공용 앱바는 기본적으로 `components/AppBar.tsx`와 React Native Paper의 `Appbar`를 재사용하고 먼저 확장한다. 승인된 화면 요구를 공용 앱바로 표현할 수 없을 때만 라우트 전용 구성을 검토하며, 두 번째 앱바 라이브러리는 추가하지 않는다.
+- 폼 상태와 검증은 React Hook Form의 `useForm`, `Controller`, `FormProvider`를 사용한다.
+- SVG는 `react-native-svg`로 렌더링한다. 단일 SVG 때문에 transformer나 Metro 설정을 추가하지 않는다.
+
+## Product Phase And Server Boundary
+
+- 현재 우선순위는 Figma 기반 앱 레이아웃과 네이티브 상호작용 구현이다. 사용자가 서버 기술과 API·인증 계약을 승인하기 전까지 최종 형식을 정하지 않는다. 계약이 승인되면 이 임시 경계와 서버 백로그를 실제 정책에 맞게 갱신한다.
+- 서버 기술, 엔드포인트, 응답 모델, Token 저장 방식과 상태 관리 라이브러리를 임의로 선택하거나 미리 추상화하지 않는다.
+- 서버가 필요한 기능은 UI 입력과 검증까지만 구현하고 `utils/alerts.ts`의 명시적인 서버 연동 대기 안내를 사용한다.
+- 서버 응답 없이 로그인, 회원가입, 정보 변경, 마일리지 신청, 이메일 찾기, 비밀번호 재설정이 성공한 것처럼 표시하지 않는다.
+- 데모 계정, `__DEV__` 결과 분기, 쿼리 기반 preview, 하드코딩된 성공 결과, 가짜 세션·Token·타이머·`verificationProof`를 런타임 코드에 만들지 않는다.
+- 서버에 필요하다고 확인된 기능은 구현을 추측하는 대신 `docs/development-notes.md`의 서버 요구사항 백로그에 추가한다.
+- 실제 인증이 없는 동안 로그인 이후 화면은 레이아웃 검토용으로 직접 열릴 수 있으며 보호된 화면이라고 표현하지 않는다. 인증 계약을 연결할 때 세션 복원과 인증 상태를 소유하는 최소 루트 경계를 추가하고 미인증 화면·딥링크를 로그인으로 보낸다. 상태가 없는 빈 Provider는 미리 만들지 않는다.
+- `/reset-password`는 실제 변경 API를 연결하기 전에 서버가 발급한 유효한 일회용 Token으로 접근을 제한해야 한다.
+
+## Figma Implementation
+
+- Figma 화면을 구현할 때 시각 디자인뿐 아니라 노드에 포함된 기획 설명, 상태, 오류 문구와 이동 조건도 모두 읽는다.
+- 화면 예시 문구와 다른 요구가 충돌하면 사용자의 최신 명시적 지시, 이 문서의 승인된 제품 정책과 공통 검증 규칙, Figma 상세 기획, 시각 예시 문구 순으로 우선한다. 제품 정책, 검증 규칙, 이동 조건 또는 재사용 동작이 달라지는 판단만 개발 기록에 남긴다.
+- Figma의 높이와 간격은 기본 시각 목표로 유지하되 가로 폭은 유연하게 만든다. 콘텐츠, 접근성 글자 확대, Safe Area, 키보드와 작은 화면 때문에 필요한 경우 높이가 확장될 수 있어야 한다. `SafeAreaView`, `KeyboardAvoidingView`, `ScrollView`로 네이티브 환경을 처리한다.
+- 앱바와 화면 제목에는 `에이치플러스에코` 접두사를 반복하지 않는다. `로그인`, `회원가입`, `이메일 찾기`처럼 기능명만 사용한다.
+- 앱바의 뒤로가기는 제공된 SVG 경로를 사용하고 실제 이전 화면이 있을 때만 표시한다. 동작이 정의되지 않은 아이콘이나 버튼을 임의로 추가하지 않는다.
+- 로고와 아이콘은 Figma 원본 에셋 또는 사용자가 제공한 SVG를 우선한다. 이미 있는 에셋을 다시 그리거나 중복 저장하지 않는다.
+
+## Review-Friendly Architecture
+
+- 사용자가 직접 코드를 리뷰하므로 가장 적은 파일과 가장 짧은 의존 흐름을 우선한다.
+- 화면별 React Hook Form 상태, 검증 조건, 이동과 서버 요청 조정 로직은 해당 라우트 가까이에 둔다. 승인된 서버 계약이나 실제 중복이 별도 경계를 요구할 때만 가장 작은 책임을 추출한다.
+- 실제로 두 곳 이상에서 같은 책임이 반복될 때만 컴포넌트나 유틸로 추출한다. 미래에 재사용할 것 같다는 이유만으로 추상화하지 않는다.
+- 이미 검증된 공용 경계를 우선 재사용한다.
+  - `components/AppBar.tsx`: Stack 공용 앱바
+  - `components/AppScreen.tsx`: `auth`·`main` 화면의 Safe Area, 키보드, 스크롤, 상단 영역, 하단 메뉴와 푸터
+  - `components/auth/AppFooter.tsx`: 공용 푸터
+  - `components/auth/FormTextField.tsx`: 입력과 오류 표시
+  - `components/auth/PrimaryButton.tsx`: 단순 주요 버튼
+  - `components/auth/PhoneVerificationSection.tsx`: 연락처와 인증번호 두 행
+- 한 화면에서만 쓰는 작은 UI는 우선 라우트 파일의 비공개 컴포넌트로 둔다.
+- 디자인 SVG 아이콘은 위 원칙의 예외로 `components/icons/<Name>Icon.tsx`에 아이콘당 한 파일로 둔다. 선택·활성 같은 같은 아이콘의 상태 차이는 별도 파일을 만들지 않고 props로 표현한다.
+- 화면과 기능 컴포넌트 안에 독립 `Svg` 아이콘 컴포넌트를 선언하지 않는다. 기존 아이콘을 먼저 재사용하고, 새 아이콘은 Figma 또는 사용자 제공 원본 경로를 `constants/assets.ts`에 한 번만 추가해 전용 아이콘 컴포넌트에서 렌더링한다.
+- 아이콘 배럴 파일, SVG transformer, 두 번째 아이콘 라이브러리와 범용 `name` 기반 아이콘 팩은 추가하지 않는다. 각 사용처는 필요한 아이콘 파일을 직접 import한다.
+- `src/` 재구성, 배럴 파일, 범용 폼 컴포넌트, API 서비스, 커스텀 Hook과 전역 상태는 선제적으로 추가하지 않는다. 공용 UI·유틸은 실제 두 번째 사용처를 기준으로 하고, 외부 API나 인증 경계는 승인된 계약이 필요성을 증명할 때 가장 작은 형태로 추가한다.
+- 단순한 기능을 위해 새 UI·폼·라우팅 라이브러리를 추가하지 않는다. 기존 Expo와 현재 의존성으로 해결 가능한지 먼저 확인한다.
+
+## Forms And Shared Resources
+
+- 이메일·비밀번호·연락처·인증번호 검증은 `utils/validation.ts`에서 관리한다.
+- 입력값 표시는 `utils/inputFormat.ts`에서 관리한다. 휴대폰 번호는 숫자만 받아 `010-0000-0000` 형식으로 자동 변환한다.
+- 이메일은 일반적인 이메일 형식을 검증한다.
+- 비밀번호는 영문, 숫자, 특수문자를 모두 포함한 8자 이상으로 통일한다. Figma 예시의 `6자리` 문구는 정책으로 사용하지 않는다.
+- 인증번호는 숫자 6자리로 통일한다.
+- 색상과 타이포그래피는 `constants/theme.ts`, 이미지와 SVG 경로는 `constants/assets.ts`, 공용 안내창은 `utils/alerts.ts`에서 관리한다. 화면 파일에 동일한 원시 값을 반복하지 않는다.
+- 입력에는 적절한 키보드, `textContentType`, `autoComplete`, return key와 오류 접근성 속성을 제공한다. 다음 입력이 있으면 포커스를 이동하고 마지막 입력은 제출하거나 키보드를 닫는 명확한 동작을 갖는다.
+- 공용 컴포넌트는 서버 세션이나 도메인 로직을 소유하지 않는다. 화면이 서버 콜백과 화면별 선행 조건을 전달한다.
+
+## Current Approved Phone Verification Policy
+
+아래 정책은 사용자가 명시적으로 변경하기 전까지 적용한다. 서버 계약이 확정되면 상세 백로그와 함께 갱신한다.
+
+- 회원가입, 이메일 찾기와 비밀번호 찾기에서 휴대폰 인증은 필수다.
+- 인증번호는 카카오톡으로 발송하고 별도의 확인 요청이 성공했을 때만 서버가 `verificationProof`를 발급한다.
+- 인증번호 유효시간은 서버 발송 성공 시점부터 3분이다. 재발송하면 이전 인증번호를 즉시 무효화한다.
+- 현재 확정 정책에는 재발송 대기시간, 발송 요청 횟수 제한과 인증 시도 횟수 제한이 없다. 임의로 제한을 추가하지 않는다.
+- 발송 선행 조건은 다음과 같다.
+  - 회원가입: 유효한 휴대폰 번호
+  - 이메일 찾기: 유효한 휴대폰 번호
+  - 비밀번호 찾기: 유효한 이메일과 휴대폰 번호
+- 휴대폰, 인증번호 또는 비밀번호 찾기의 이메일이 바뀌면 기존 증명을 즉시 폐기한다.
+- 최종 요청은 비어 있지 않은 서버 발급 `verificationProof`를 요구한다. 클라이언트에서 6자리 입력만 보고 인증 완료로 판단하지 않는다.
+- 서버는 증명을 인증 목적과 입력 범위에 묶어 검증해야 한다. 회원가입·이메일 찾기는 휴대폰, 비밀번호 찾기는 이메일과 휴대폰 조합에 묶는다.
+- 발송 성공 상태와 3분 타이머는 서버의 발송 성공 응답 뒤에만 시작한다. 인증 완료 상태는 별도의 확인 성공 응답과 유효한 `verificationProof`를 받은 뒤에만 만든다.
+
+## Verification And Handoff
+
+- 의미 있는 변경 후 최소한 `pnpm typecheck`와 `git diff --check`를 실행한다.
+- Expo 의존성이나 설정을 바꾸면 `pnpm exec expo install --check`와 `pnpm exec expo config --type public`도 실행한다.
+- 라우팅 또는 네이티브 의존성이 바뀌면 위험도에 맞춰 iOS·Android Metro 번들 또는 시뮬레이터를 확인한다.
+- 테스트, 번들, 시뮬레이터와 실기기 결과는 실제로 실행한 것만 보고한다. 검증하지 않은 플랫폼이나 상호작용은 명시한다.
+- 테스트를 위해 개발 서버를 실행했다면 작업 종료 전에 해당 세션을 종료해 불필요한 CPU 사용을 남기지 않는다. 다른 사용자가 실행한 서버는 종료하지 않는다.
+- 구현을 마칠 때 이번에 변경한 파일만 리뷰 순서와 각 파일에서 확인할 핵심 책임을 함께 제공한다. 의존 관계와 리뷰 가치가 높은 파일부터 안내하고 해당되지 않는 범주는 억지로 포함하지 않는다.
+- 기존 사용자 변경을 보존하고 작업 범위 밖의 파일을 되돌리지 않는다. 사용자가 명시적으로 요청한 경우에만 커밋한다.
 
 ## Development Evidence
 
-After a meaningful React Native implementation, append to `docs/development-notes.md` in Korean.
+교차 화면 구조, 제품 정책, 서버 요구사항 또는 쉽게 드러나지 않는 네이티브 판단을 바꾸는 의미 있는 React Native 구현 후 `docs/development-notes.md`에 한국어로 기록한다. 단순 문구·스타일 수정은 반복적인 기록을 만들지 않고 최종 보고에만 남긴다.
 
-- Record the React Native or Expo concepts used and how they differ from web development.
-- Separate AI assistance from developer decisions, corrections, and verification.
-- Record only tests and device checks that were actually run.
-- Add newly discovered server capabilities without assuming a backend technology or final API shape.
-- Do not invent metrics or outcomes; write `[측정 필요]` when evidence is unavailable.
+- 사용한 React Native 또는 Expo 개념과 웹 개발과의 차이를 기록한다.
+- AI가 지원한 부분과 개발자가 결정·수정·검증한 부분을 분리한다.
+- 실제로 실행한 테스트와 기기 확인만 기록한다.
+- 서버 기술이나 최종 API 형식을 가정하지 않고 새로 확인된 서버 기능을 백로그에 추가한다.
+- 수치나 결과를 만들어내지 않는다. 근거가 없으면 `[측정 필요]`로 기록한다.
+- 과거 구현 설명이 현재 코드와 모순되지 않도록 기능을 제거하거나 정책을 바꿀 때 관련 기록도 함께 갱신한다.

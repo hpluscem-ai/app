@@ -1,7 +1,7 @@
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, View } from 'react-native';
 
-import { AuthScreen } from '../components/auth/AuthScreen';
+import { AppScreen } from '../components/AppScreen';
 import { FormTextField } from '../components/auth/FormTextField';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
 import { showResetPasswordServerPendingAlert } from '../utils/alerts';
@@ -33,7 +33,11 @@ export default function ResetPasswordRoute() {
   // 서버의 재설정 Token 정책이 확정되면 이 route의 접근 제어를 연결한다.
 
   return (
-    <AuthScreen contentStyle={styles.authContent} title="비밀번호 변경">
+    <AppScreen
+      contentStyle={styles.authContent}
+      title="비밀번호 변경"
+      variant="auth"
+    >
       <View style={styles.form}>
         <View style={styles.fields}>
           <Controller
@@ -92,7 +96,7 @@ export default function ResetPasswordRoute() {
           onPress={submitForm}
         />
       </View>
-    </AuthScreen>
+    </AppScreen>
   );
 }
 
