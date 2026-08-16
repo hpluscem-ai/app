@@ -10,20 +10,20 @@ import { showMileageReRegistrationServerPendingAlert } from '../../utils/alerts'
 type MileageStatus = 'pending' | 'rejected';
 
 function isMileageStatus(
-  value: string | string[] | undefined,
+  value: string | undefined,
 ): value is MileageStatus {
   return value === 'pending' || value === 'rejected';
 }
 
 export default function MileageStatusRoute() {
-  const { status } = useLocalSearchParams<{ status?: string | string[] }>();
+  const { status } = useLocalSearchParams<{ status?: string }>();
 
   if (!isMileageStatus(status)) {
     return <Redirect href="/mileage" />;
   }
 
   const rejected = status === 'rejected';
-  const title = rejected ? '반려 상세' : '대기 사진보기';
+  const title = rejected ? '반려' : '대기';
 
   return (
     <>

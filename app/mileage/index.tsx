@@ -14,10 +14,26 @@ function formatLocalDate(date: Date) {
   return `${year}. ${month}. ${day}`;
 }
 
+function getOneMonthAgo(date: Date) {
+  const result = new Date(date);
+  const day = result.getDate();
+
+  result.setDate(1);
+  result.setMonth(result.getMonth() - 1);
+  const lastDay = new Date(
+    result.getFullYear(),
+    result.getMonth() + 1,
+    0,
+  ).getDate();
+  result.setDate(Math.min(day, lastDay));
+
+  return result;
+}
+
 export default function MileageRoute() {
   const router = useRouter();
   const today = new Date();
-  const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+  const oneMonthAgo = getOneMonthAgo(today);
 
   return (
     <AppScreen activeTab="mileage" variant="main">
@@ -87,9 +103,7 @@ export default function MileageRoute() {
             style={styles.periodRow}
           >
             <CalendarIcon />
-            <Text style={styles.periodDate}>
-              {formatLocalDate(firstDayOfMonth)}
-            </Text>
+            <Text style={styles.periodDate}>{formatLocalDate(oneMonthAgo)}</Text>
             <Text style={styles.periodSeparator}>~</Text>
             <CalendarIcon />
             <Text style={styles.periodDate}>{formatLocalDate(today)}</Text>

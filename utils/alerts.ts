@@ -59,6 +59,13 @@ export function showImageSizeUnavailableAlert() {
   );
 }
 
+export function showUnsupportedImageFormatAlert() {
+  Alert.alert(
+    '지원하지 않는 이미지 형식',
+    'JPG, PNG, HEIC 또는 HEIF 이미지를 선택해주세요.',
+  );
+}
+
 export function showMileageImagesRequiredAlert() {
   Alert.alert(
     '사진을 확인해주세요.',

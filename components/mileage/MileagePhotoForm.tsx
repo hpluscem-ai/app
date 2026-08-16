@@ -11,6 +11,7 @@ import {
   showImageSourceActions,
   showMileageAtLeastOneImageRequiredAlert,
   showMileageImagesRequiredAlert,
+  showUnsupportedImageFormatAlert,
 } from '../../utils/alerts';
 import { PrimaryButton } from '../auth/PrimaryButton';
 import { UploadCard, type UploadKind } from './UploadCard';
@@ -31,6 +32,30 @@ type MileagePhotoFormProps = {
 };
 
 const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
+const SUPPORTED_IMAGE_FORMATS = new Set(['heic', 'heif', 'jpeg', 'jpg', 'png']);
+
+function isSupportedImageFormat(asset: ImagePicker.ImagePickerAsset) {
+  const mimeType = asset.mimeType?.toLowerCase();
+
+  if (mimeType) {
+    const [type, format] = mimeType.split('/');
+    return type === 'image' && SUPPORTED_IMAGE_FORMATS.has(format);
+  }
+
+  const fileName = (asset.fileName ?? asset.uri.split('/').pop() ?? '').split(
+    /[?#]/,
+    1,
+  )[0];
+  const extensionSeparator = fileName.lastIndexOf('.');
+
+  if (extensionSeparator < 0) {
+    return true;
+  }
+
+  return SUPPORTED_IMAGE_FORMATS.has(
+    fileName.slice(extensionSeparator + 1).toLowerCase(),
+  );
+}
 
 export function MileagePhotoForm({
   intro,
@@ -69,6 +94,11 @@ export function MileagePhotoForm({
 
       if (!asset || (asset.type && asset.type !== 'image')) {
         showImagePickerErrorAlert();
+        return;
+      }
+
+      if (!isSupportedImageFormat(asset)) {
+        showUnsupportedImageFormatAlert();
         return;
       }
 
