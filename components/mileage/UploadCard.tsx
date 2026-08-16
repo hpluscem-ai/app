@@ -10,10 +10,11 @@ export type UploadKind = 'receipt' | 'dashboard';
 
 type UploadCardProps = {
   error: boolean;
+  emptyLabel?: string;
   image: ImagePickerAsset | null;
   kind: UploadKind;
-  onChoose: () => void;
-  onRemove: () => void;
+  onChoose?: () => void;
+  onRemove?: () => void;
 };
 
 const uploadCopy = {
@@ -29,12 +30,14 @@ const uploadCopy = {
 
 export function UploadCard({
   error,
+  emptyLabel,
   image,
   kind,
   onChoose,
   onRemove,
 }: UploadCardProps) {
   const copy = uploadCopy[kind];
+  const label = emptyLabel ?? copy.placeholder;
 
   if (image) {
     return (
@@ -49,19 +52,38 @@ export function UploadCard({
         />
         <View style={styles.previewLabel}>
           <Text style={styles.previewLabelText}>{copy.selected}</Text>
-          <Pressable
-            accessibilityLabel={`${copy.selected} 사진 삭제`}
-            accessibilityRole="button"
-            hitSlop={6}
-            onPress={onRemove}
-            style={({ pressed }) => [
-              styles.closeButton,
-              pressed && styles.pressed,
-            ]}
-          >
-            <CloseIcon />
-          </Pressable>
+          {onRemove ? (
+            <Pressable
+              accessibilityLabel={`${copy.selected} 사진 삭제`}
+              accessibilityRole="button"
+              hitSlop={6}
+              onPress={onRemove}
+              style={({ pressed }) => [
+                styles.closeButton,
+                pressed && styles.pressed,
+              ]}
+            >
+              <CloseIcon />
+            </Pressable>
+          ) : null}
         </View>
+      </View>
+    );
+  }
+
+  if (!onChoose) {
+    return (
+      <View
+        accessibilityLabel={
+          error ? `${label}. 필수 사진이 없습니다.` : label
+        }
+        accessible
+        style={[styles.uploadCard, error && styles.uploadCardError]}
+      >
+        <View style={styles.iconSurface}>
+          {kind === 'receipt' ? <ReceiptIcon /> : <DashboardIcon />}
+        </View>
+        <Text style={styles.placeholderText}>{label}</Text>
       </View>
     );
   }
@@ -69,7 +91,9 @@ export function UploadCard({
   return (
     <Pressable
       accessibilityHint="카메라 촬영 또는 갤러리 선택 메뉴를 엽니다."
-      accessibilityLabel={copy.placeholder}
+      accessibilityLabel={
+        error ? `${label}. 필수 사진이 없습니다.` : label
+      }
       accessibilityRole="button"
       onPress={onChoose}
       style={({ pressed }) => [
@@ -81,7 +105,7 @@ export function UploadCard({
       <View style={styles.iconSurface}>
         {kind === 'receipt' ? <ReceiptIcon /> : <DashboardIcon />}
       </View>
-      <Text style={styles.placeholderText}>{copy.placeholder}</Text>
+      <Text style={styles.placeholderText}>{label}</Text>
     </Pressable>
   );
 }
@@ -89,8 +113,8 @@ export function UploadCard({
 const styles = StyleSheet.create({
   uploadCard: {
     minWidth: 0,
+    minHeight: 171,
     flex: 1,
-    aspectRatio: 1,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 16,

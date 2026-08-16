@@ -20,6 +20,7 @@
 - 데모 계정, `__DEV__` 결과 분기, 쿼리 기반 preview, 하드코딩된 성공 결과, 가짜 세션·Token·타이머·`verificationProof`를 런타임 코드에 만들지 않는다.
 - 서버에 필요하다고 확인된 기능은 구현을 추측하는 대신 `docs/development-notes.md`의 서버 요구사항 백로그에 추가한다.
 - 실제 인증이 없는 동안 로그인 이후 화면은 레이아웃 검토용으로 직접 열릴 수 있으며 보호된 화면이라고 표현하지 않는다. 인증 계약을 연결할 때 세션 복원과 인증 상태를 소유하는 최소 루트 경계를 추가하고 미인증 화면·딥링크를 로그인으로 보낸다. 상태가 없는 빈 Provider는 미리 만들지 않는다.
+- 인증 계약을 연결한 뒤 앱 시작 시 복원된 세션이 유효하면 `/mileage`를 첫 화면으로 사용하고, 세션이 없거나 만료됐을 때만 `/login`으로 보낸다. 세션 확인 실패와 마일리지 조회 실패를 빈 내역으로 처리하지 않는다.
 - `/reset-password`는 실제 변경 API를 연결하기 전에 서버가 발급한 유효한 일회용 Token으로 접근을 제한해야 한다.
 
 ## Figma Implementation
@@ -38,7 +39,7 @@
 - 실제로 두 곳 이상에서 같은 책임이 반복될 때만 컴포넌트나 유틸로 추출한다. 미래에 재사용할 것 같다는 이유만으로 추상화하지 않는다.
 - 이미 검증된 공용 경계를 우선 재사용한다.
   - `components/AppBar.tsx`: Stack 공용 앱바
-  - `components/AppScreen.tsx`: `auth`·`main` 화면의 Safe Area, 키보드, 스크롤, 상단 영역, 하단 메뉴와 푸터
+  - `components/AppScreen.tsx`: `auth`·`main`·Stack 상세 화면의 Safe Area, 키보드, 스크롤, 상단 영역, 하단 메뉴와 푸터
   - `components/auth/AppFooter.tsx`: 공용 푸터
   - `components/auth/FormTextField.tsx`: 입력과 오류 표시
   - `components/auth/PrimaryButton.tsx`: 단순 주요 버튼

@@ -15,6 +15,8 @@ export const colors = {
   gray800: '#262C3A',
   red500: '#FE4C4C',
   brand: '#040648',
+  mileageAction: '#4C69FE',
+  mileageTint: '#EDF0FF',
   error: '#D92D20',
 } as const;
 
@@ -42,5 +44,23 @@ export const typography = {
     fontWeight: '700',
     letterSpacing: 0,
     lineHeight: 16,
+  },
+  heading: {
+    fontSize: 20,
+    fontWeight: '400',
+    letterSpacing: 0,
+    lineHeight: 30,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '400',
+    letterSpacing: 0,
+    lineHeight: 26,
+  },
+  mileageBalance: {
+    fontSize: 32,
+    fontWeight: '400',
+    letterSpacing: 0,
+    lineHeight: 48,
   },
 } as const satisfies Record<string, TypographyToken>;

@@ -20,6 +20,7 @@ import { AppFooter } from './auth/AppFooter';
 import { DockIcon, type DockIconName } from './icons/DockIcon';
 
 type MainTab = 'mileage' | 'apply' | 'map' | 'profile';
+type MainDockMode = 'flow' | 'hidden' | 'overlay';
 
 type AppScreenProps =
   | {
@@ -31,11 +32,17 @@ type AppScreenProps =
   | {
       activeTab: MainTab;
       children: ReactNode;
+      dockMode?: MainDockMode;
+      scrollEnabled?: boolean;
       variant: 'main';
+    }
+  | {
+      children: ReactNode;
+      variant: 'plain';
     };
 
 type DockItem = {
-  href?: '/mileage/apply' | '/mypage';
+  href?: '/map' | '/mileage' | '/mileage/apply' | '/mypage';
   icon: DockIconName;
   key: MainTab;
   label: string;
@@ -43,7 +50,7 @@ type DockItem = {
 
 const dockItems = [
   {
-    href: undefined,
+    href: '/mileage',
     icon: 'mileage',
     key: 'mileage',
     label: '마일리지',
@@ -54,7 +61,7 @@ const dockItems = [
     key: 'apply',
     label: '적립',
   },
-  { href: undefined, icon: 'map', key: 'map', label: '지도' },
+  { href: '/map', icon: 'map', key: 'map', label: '지도' },
   { href: '/mypage', icon: 'profile', key: 'profile', label: '내정보' },
 ] as const satisfies ReadonlyArray<DockItem>;
 
@@ -137,6 +144,8 @@ function DockBar({ activeTab }: { activeTab: MainTab }) {
 /** 화면 종류에 맞춰 공통 스크롤 영역, 상단 영역, 하단 메뉴와 푸터를 구성합니다. */
 export function AppScreen(props: AppScreenProps) {
   const isMain = props.variant === 'main';
+  const dockMode = isMain ? (props.dockMode ?? 'flow') : 'hidden';
+  const scrollEnabled = isMain ? (props.scrollEnabled ?? true) : true;
 
   return (
     <SafeAreaView
@@ -156,6 +165,7 @@ export function AppScreen(props: AppScreenProps) {
           contentContainerStyle={styles.scrollContent}
           keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           keyboardShouldPersistTaps="handled"
+          scrollEnabled={scrollEnabled}
           showsVerticalScrollIndicator={false}
         >
           {props.variant === 'auth' ? (
@@ -163,10 +173,19 @@ export function AppScreen(props: AppScreenProps) {
               <AuthBrand title={props.title} />
               {props.children}
             </View>
+          ) : props.variant === 'main' ? (
+            <View style={styles.mainContent}>
+              {props.children}
+              {dockMode === 'overlay' ? (
+                <View pointerEvents="box-none" style={styles.dockOverlay}>
+                  <DockBar activeTab={props.activeTab} />
+                </View>
+              ) : null}
+            </View>
           ) : (
             props.children
           )}
-          {props.variant === 'main' ? (
+          {props.variant === 'main' && dockMode === 'flow' ? (
             <DockBar activeTab={props.activeTab} />
           ) : null}
           <AppFooter />
@@ -186,6 +205,16 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
+  },
+  mainContent: {
+    width: '100%',
+    position: 'relative',
+  },
+  dockOverlay: {
+    position: 'absolute',
+    right: 0,
+    bottom: 0,
+    left: 0,
   },
   authContent: {
     width: '100%',

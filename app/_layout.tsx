@@ -36,10 +36,16 @@ export default function RootLayout() {
             options={{ title: '비밀번호 재설정' }}
           />
           <Stack.Screen name="mypage" options={{ headerShown: false }} />
+          <Stack.Screen name="map" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="mileage/index"
+            options={{ headerShown: false }}
+          />
           <Stack.Screen
             name="mileage/apply"
             options={{ headerShown: false }}
           />
+          <Stack.Screen name="mileage/[status]" />
         </Stack>
       </PaperProvider>
     </SafeAreaProvider>

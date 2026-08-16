@@ -66,10 +66,21 @@ export function showMileageImagesRequiredAlert() {
   );
 }
 
+export function showMileageAtLeastOneImageRequiredAlert() {
+  Alert.alert('사진을 확인해주세요.', '재등록할 사진을 한 장 이상 등록해주세요.');
+}
+
 export function showMileageServerPendingAlert() {
   Alert.alert(
     '마일리지 적립 서버 연동 필요',
     '사진 업로드와 적립 신청 API가 정해진 뒤 등록 요청을 연결합니다.',
+  );
+}
+
+export function showMileageReRegistrationServerPendingAlert() {
+  Alert.alert(
+    '마일리지 재등록 서버 연동 필요',
+    '재등록 사진 업로드와 적립 신청 API가 정해진 뒤 재등록 요청을 연결합니다.',
   );
 }
 
@@ -148,5 +159,12 @@ export function showResetPasswordServerPendingAlert() {
   Alert.alert(
     '비밀번호 변경 서버 연동 필요',
     '재설정 Token 검증과 비밀번호 변경 API가 정해진 뒤 변경 요청을 연결합니다.',
+  );
+}
+
+export function showTmapOpenFailedAlert() {
+  Alert.alert(
+    '티맵을 열 수 없습니다.',
+    '티맵 또는 앱 스토어를 열지 못했습니다. 잠시 후 다시 시도해주세요.',
   );
 }
