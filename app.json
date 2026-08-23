@@ -38,6 +38,18 @@
           "microphonePermission": false
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5662428d-3c5d-4388-9ba8-04f35688f54f"
+      }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/5662428d-3c5d-4388-9ba8-04f35688f54f"
+    }
   }
 }
