@@ -1,14 +1,6 @@
 import { useRouter } from 'expo-router';
-import {
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import {
-  Controller,
-  useForm,
-} from 'react-hook-form';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Controller, useForm } from 'react-hook-form';
 
 import { AppScreen } from '../components/AppScreen';
 import { FormTextField } from '../components/auth/FormTextField';
@@ -58,6 +50,7 @@ export default function LoginRoute() {
                 error={errors.email?.message}
                 inputRef={ref}
                 keyboardType="email-address"
+                label="이메일"
                 onBlur={onBlur}
                 onChangeText={onChange}
                 onSubmitEditing={() => setFocus('password')}
@@ -78,6 +71,7 @@ export default function LoginRoute() {
                 autoComplete="current-password"
                 error={errors.password?.message}
                 inputRef={ref}
+                label="비밀번호"
                 onBlur={onBlur}
                 onChangeText={onChange}
                 onSubmitEditing={submitForm}
@@ -135,7 +129,7 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   fields: {
-    gap: 8,
+    gap: 16,
   },
   actions: {
     width: '100%',
@@ -147,9 +141,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    flexWrap: 'wrap',
   },
   linkText: {
-    ...typography.body,
+    ...typography.authBody,
     color: colors.black,
   },
 });

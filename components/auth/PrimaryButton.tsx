@@ -36,14 +36,16 @@ export function PrimaryButton({
 
 const styles = StyleSheet.create({
   button: {
-    height: 52,
+    minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.gray800,
+    borderRadius: 26,
+    backgroundColor: colors.brand500,
     paddingHorizontal: 16,
+    paddingVertical: 16,
   },
   label: {
-    ...typography.body,
+    ...typography.authAction,
     color: colors.white,
   },
   disabled: {

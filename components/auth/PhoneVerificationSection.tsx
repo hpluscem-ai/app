@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Controller, useFormContext } from 'react-hook-form';
 
+import { colors, typography } from '../../constants/theme';
 import {
   formatPhoneNumber,
   formatVerificationCode,
@@ -29,6 +30,7 @@ type VerificationValues = Pick<
 >;
 
 type PhoneVerificationSectionProps = {
+  required?: boolean;
   requestPrerequisiteMet?: boolean;
   verificationScope?: string;
   onRequestCode: (
@@ -40,6 +42,7 @@ type PhoneVerificationSectionProps = {
 };
 
 export function PhoneVerificationSection({
+  required = true,
   requestPrerequisiteMet = true,
   verificationScope = '',
   onRequestCode,
@@ -48,6 +51,7 @@ export function PhoneVerificationSection({
   const actionInFlightRef = useRef(false);
   const inputRevisionRef = useRef(0);
   const previousVerificationScopeRef = useRef(verificationScope);
+  const [hasRequestedCode, setHasRequestedCode] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
   const {
@@ -59,17 +63,7 @@ export function PhoneVerificationSection({
     setFocus,
     setValue,
     trigger,
-    watch,
   } = useFormContext<PhoneVerificationFormValues>();
-  const phone = watch('phone');
-  const verificationCode = watch('verificationCode');
-  const canRequestCode =
-    requestPrerequisiteMet &&
-    validatePhoneNumber(phone) === true &&
-    !isRequesting &&
-    !isVerifying;
-  const canVerifyCode =
-    canRequestCode && validateVerificationCode(verificationCode) === true;
 
   useEffect(() => {
     if (previousVerificationScopeRef.current === verificationScope) {
@@ -78,6 +72,7 @@ export function PhoneVerificationSection({
 
     previousVerificationScopeRef.current = verificationScope;
     inputRevisionRef.current += 1;
+    setHasRequestedCode(false);
     setValue('verificationCode', '', {
       shouldDirty: true,
     });
@@ -86,18 +81,34 @@ export function PhoneVerificationSection({
   }, [clearErrors, setValue, verificationScope]);
 
   const requestCode = async () => {
-    if (!canRequestCode || actionInFlightRef.current) {
+    if (actionInFlightRef.current) {
       return;
     }
 
+    const phone = getValues('phone');
+    const phoneValidation = validatePhoneNumber(phone);
+
+    if (phoneValidation !== true) {
+      setError('phone', {
+        message: phoneValidation,
+        type: 'validate',
+      });
+      return;
+    }
+
+    if (!requestPrerequisiteMet) {
+      return;
+    }
+
+    await trigger('phone');
     actionInFlightRef.current = true;
     const requestRevision = ++inputRevisionRef.current;
     setIsRequesting(true);
     setValue('verificationCode', '', {
       shouldDirty: true,
-      shouldValidate: true,
     });
     setValue('verificationProof', '', { shouldDirty: true });
+    clearErrors('verificationCode');
 
     try {
       const result = await onRequestCode(phone);
@@ -106,8 +117,8 @@ export function PhoneVerificationSection({
         getValues('phone') === phone;
 
       if (result.status === 'sent' && inputsAreUnchanged) {
+        setHasRequestedCode(true);
         clearErrors('phone');
-        await trigger('phone');
         setFocus('verificationCode');
       }
     } catch {
@@ -126,7 +137,13 @@ export function PhoneVerificationSection({
     }
   };
 
-  const verifyCode = async () => {
+  const verifyCode = async (verificationCode: string) => {
+    const phone = getValues('phone');
+    const canVerifyCode =
+      hasRequestedCode &&
+      validatePhoneNumber(phone) === true &&
+      validateVerificationCode(verificationCode) === true;
+
     if (!canVerifyCode || actionInFlightRef.current) {
       return;
     }
@@ -140,8 +157,7 @@ export function PhoneVerificationSection({
       const result = await onVerifyCode({ phone, verificationCode });
       const inputsAreUnchanged =
         inputRevisionRef.current === verificationRevision &&
-        getValues('phone') === phone &&
-        getValues('verificationCode') === verificationCode;
+        getValues('phone') === phone;
 
       if (
         result.status === 'verified' &&
@@ -152,7 +168,6 @@ export function PhoneVerificationSection({
         setValue('verificationProof', result.verificationProof, {
           shouldDirty: true,
         });
-        await trigger('verificationCode');
       } else if (
         result.status === 'verified' &&
         !result.verificationProof.trim() &&
@@ -166,8 +181,7 @@ export function PhoneVerificationSection({
     } catch {
       if (
         inputRevisionRef.current === verificationRevision &&
-        getValues('phone') === phone &&
-        getValues('verificationCode') === verificationCode
+        getValues('phone') === phone
       ) {
         setError('verificationCode', {
           message: '인증번호 확인에 실패했습니다. 다시 시도해주세요.',
@@ -182,6 +196,7 @@ export function PhoneVerificationSection({
 
   return (
     <View style={styles.fields}>
+      <Text style={styles.label}>연락처</Text>
       <View style={styles.row}>
         <Controller
           control={control}
@@ -190,7 +205,7 @@ export function PhoneVerificationSection({
             <FormTextField
               accessibilityLabel="연락처"
               autoComplete="tel"
-              containerStyle={styles.field}
+              containerStyle={styles.phoneField}
               error={errors.phone?.message}
               inputRef={ref}
               keyboardType="phone-pad"
@@ -198,75 +213,96 @@ export function PhoneVerificationSection({
               onBlur={onBlur}
               onChangeText={(nextValue) => {
                 inputRevisionRef.current += 1;
+                setHasRequestedCode(false);
+                setValue('verificationCode', '', { shouldDirty: true });
                 setValue('verificationProof', '', { shouldDirty: true });
+                clearErrors('verificationCode');
                 onChange(formatPhoneNumber(nextValue));
               }}
-              onSubmitEditing={() => setFocus('verificationCode')}
+              onSubmitEditing={() => void requestCode()}
               placeholder="연락처를 입력해주세요."
               textContentType="telephoneNumber"
               value={value}
             />
           )}
-          rules={{ validate: validatePhoneNumber }}
+          rules={{
+            validate: (value) =>
+              !required &&
+              !value &&
+              !getValues('verificationCode')
+                ? true
+                : validatePhoneNumber(value),
+          }}
         />
         <PrimaryButton
-          disabled={!canRequestCode}
-          label="인증번호 발송"
+          disabled={isRequesting || isVerifying}
+          label={hasRequestedCode ? '재발송' : '인증번호 발송'}
           onPress={() => void requestCode()}
-          width={114}
+          width={107}
         />
       </View>
 
-      <View style={styles.row}>
-        <Controller
-          control={control}
-          name="verificationCode"
-          render={({ field: { onBlur, onChange, ref, value } }) => (
-            <FormTextField
-              accessibilityLabel="인증번호"
-              autoComplete="one-time-code"
-              containerStyle={styles.field}
-              error={errors.verificationCode?.message}
-              inputRef={ref}
-              keyboardType="number-pad"
-              maxLength={6}
-              onBlur={onBlur}
-              onChangeText={(nextValue) => {
-                inputRevisionRef.current += 1;
-                setValue('verificationProof', '', { shouldDirty: true });
-                onChange(formatVerificationCode(nextValue));
-              }}
-              onSubmitEditing={() => void verifyCode()}
-              placeholder="인증번호를 입력해주세요."
-              returnKeyType="done"
-              textContentType="oneTimeCode"
-              value={value}
-            />
-          )}
-          rules={{ validate: validateVerificationCode }}
-        />
-        <PrimaryButton
-          disabled={!canVerifyCode}
-          label="인증번호 확인"
-          onPress={() => void verifyCode()}
-          width={114}
-        />
-      </View>
+      <Controller
+        control={control}
+        name="verificationCode"
+        render={({ field: { onBlur, onChange, ref, value } }) => (
+          <FormTextField
+            accessibilityLabel="인증번호"
+            autoComplete="one-time-code"
+            error={errors.verificationCode?.message}
+            inputRef={ref}
+            keyboardType="number-pad"
+            maxLength={6}
+            onBlur={onBlur}
+            onChangeText={(nextValue) => {
+              const formattedCode = formatVerificationCode(nextValue);
+
+              inputRevisionRef.current += 1;
+              setValue('verificationProof', '', { shouldDirty: true });
+              onChange(formattedCode);
+
+              if (
+                hasRequestedCode &&
+                validateVerificationCode(formattedCode) === true
+              ) {
+                void verifyCode(formattedCode);
+              }
+            }}
+            onSubmitEditing={() => void verifyCode(value)}
+            placeholder="인증번호를 입력해주세요."
+            returnKeyType="done"
+            textContentType="oneTimeCode"
+            value={value}
+          />
+        )}
+        rules={{
+          validate: (value) =>
+            !required && !value && !getValues('phone')
+              ? true
+              : validateVerificationCode(value),
+        }}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   fields: {
+    width: '100%',
     gap: 8,
+  },
+  label: {
+    ...typography.authBody,
+    color: colors.black,
+    paddingHorizontal: 8,
   },
   row: {
     width: '100%',
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
+    gap: 4,
   },
-  field: {
+  phoneField: {
     flex: 1,
   },
 });

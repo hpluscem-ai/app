@@ -1,18 +1,24 @@
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Rect } from 'react-native-svg';
 
 import { iconPaths } from '../../constants/assets';
 import { colors } from '../../constants/theme';
 
 export function CheckSquareIcon({ checked }: { checked: boolean }) {
   return (
-    <Svg fill="none" height={24} viewBox="0 0 24 24" width={24}>
+    <Svg fill="none" height={20} viewBox="0 0 20 20" width={20}>
+      <Rect
+        fill={checked ? colors.brand500 : colors.gray400}
+        height={20}
+        rx={8}
+        width={20}
+      />
       <Path
-        d={checked ? iconPaths.checkSquare : iconPaths.checkSquareFrame}
-        stroke={colors.gray800}
+        d={iconPaths.check}
+        stroke={colors.white}
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth={2}
-        transform="translate(3 3)"
+        strokeWidth={1.5}
+        transform="translate(2 2)"
       />
     </Svg>
   );

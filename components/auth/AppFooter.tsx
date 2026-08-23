@@ -74,11 +74,11 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   footerText: {
-    ...typography.captionMedium,
+    ...typography.footer,
     color: colors.gray800,
   },
   footerTextStrong: {
-    ...typography.captionBold,
+    ...typography.footerStrong,
     color: colors.gray800,
   },
 });

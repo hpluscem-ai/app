@@ -1,4 +1,9 @@
-import { StyleSheet, View } from 'react-native';
+import {
+  StyleSheet,
+  type StyleProp,
+  type TextStyle,
+  View,
+} from 'react-native';
 import { Appbar } from 'react-native-paper';
 
 import { colors, typography } from '../constants/theme';
@@ -7,10 +12,11 @@ import { BackIcon } from './icons/BackIcon';
 type AppBarProps = {
   title: string;
   onBack?: () => void;
+  titleStyle?: StyleProp<TextStyle>;
 };
 
 /** Expo Router Stack 화면에서 공통으로 사용하는 상단 앱바입니다. */
-export function AppBar({ title, onBack }: AppBarProps) {
+export function AppBar({ title, onBack, titleStyle }: AppBarProps) {
   return (
     <Appbar.Header mode="center-aligned" style={styles.bar}>
       {onBack ? (
@@ -27,7 +33,7 @@ export function AppBar({ title, onBack }: AppBarProps) {
         <View style={styles.actionSlot} />
       )}
 
-      <Appbar.Content title={title} titleStyle={styles.title} />
+      <Appbar.Content title={title} titleStyle={[styles.title, titleStyle]} />
       <View style={styles.actionSlot} />
     </Appbar.Header>
   );

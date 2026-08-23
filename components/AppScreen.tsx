@@ -22,24 +22,26 @@ import { DockIcon, type DockIconName } from './icons/DockIcon';
 type MainTab = 'mileage' | 'apply' | 'map' | 'profile';
 type MainDockMode = 'flow' | 'hidden' | 'overlay';
 
+type AppScreenBaseProps = {
+  children: ReactNode;
+  showFooter?: boolean;
+};
+
 type AppScreenProps =
-  | {
-      children: ReactNode;
+  | (AppScreenBaseProps & {
       contentStyle?: StyleProp<ViewStyle>;
       title: string;
       variant: 'auth';
-    }
-  | {
+    })
+  | (AppScreenBaseProps & {
       activeTab: MainTab;
-      children: ReactNode;
       dockMode?: MainDockMode;
       scrollEnabled?: boolean;
       variant: 'main';
-    }
-  | {
-      children: ReactNode;
+    })
+  | (AppScreenBaseProps & {
       variant: 'plain';
-    };
+    });
 
 type DockItem = {
   href?: '/map' | '/mileage' | '/mileage/apply' | '/mypage';
@@ -70,12 +72,12 @@ function AuthBrand({ title }: { title: string }) {
     <View style={styles.brandBlock}>
       <Image
         accessibilityIgnoresInvertColors
-        accessibilityLabel="에이치플러스에코 로고"
+        accessibilityLabel="하얀100 로고"
         resizeMode="contain"
-        source={imageSources.hplusEcoLogo}
-        style={styles.mainLogo}
+        source={imageSources.hayan100Logo}
+        style={styles.authLogo}
       />
-      <Text style={styles.authTitle}>{title}</Text>
+      <Text style={styles.authTitle}>하얀100 {title}</Text>
     </View>
   );
 }
@@ -85,9 +87,9 @@ function LogoHeader() {
     <View style={styles.header}>
       <Image
         accessibilityIgnoresInvertColors
-        accessibilityLabel="에이치플러스에코 로고"
+        accessibilityLabel="하얀100 로고"
         resizeMode="contain"
-        source={imageSources.hplusEcoLogo}
+        source={imageSources.hayan100Logo}
         style={styles.headerLogo}
       />
     </View>
@@ -146,6 +148,7 @@ export function AppScreen(props: AppScreenProps) {
   const isMain = props.variant === 'main';
   const dockMode = isMain ? (props.dockMode ?? 'flow') : 'hidden';
   const scrollEnabled = isMain ? (props.scrollEnabled ?? true) : true;
+  const showFooter = props.showFooter ?? true;
 
   return (
     <SafeAreaView
@@ -188,7 +191,7 @@ export function AppScreen(props: AppScreenProps) {
           {props.variant === 'main' && dockMode === 'flow' ? (
             <DockBar activeTab={props.activeTab} />
           ) : null}
-          <AppFooter />
+          {showFooter ? <AppFooter /> : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -226,26 +229,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  mainLogo: {
-    width: 152,
-    height: 40,
+  authLogo: {
+    width: 216,
+    height: 32,
   },
   authTitle: {
-    ...typography.body,
+    ...typography.authBody,
     color: colors.brand,
   },
   header: {
     width: '100%',
     height: 52,
     justifyContent: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray200,
     backgroundColor: colors.white,
     paddingHorizontal: 16,
   },
   headerLogo: {
-    width: 91,
-    height: 24,
+    width: 135,
+    height: 20,
   },
   dockSection: {
     width: '100%',

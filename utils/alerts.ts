@@ -134,13 +134,6 @@ export function showPhoneVerificationRequiredAlert() {
   Alert.alert('휴대폰 인증 필요', '인증번호 확인을 완료해주세요.');
 }
 
-export function showPhoneChangePendingAlert() {
-  Alert.alert(
-    '연락처 변경 준비 중',
-    '새 연락처 입력과 카카오톡 인증은 서버 연동 후 동작합니다.',
-  );
-}
-
 export function showProfileServerPendingAlert() {
   Alert.alert(
     '정보 변경 서버 연동 필요',
