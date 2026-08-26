@@ -5,7 +5,6 @@ import {
   AccessibilityInfo,
   Animated,
   Easing,
-  Image,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -20,7 +19,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppScreen } from '../../components/AppScreen';
-import { imageSources } from '../../constants/assets';
+import { MileageWaterJugIcon } from '../../components/icons/MileageWaterJugIcon';
 import { colors, typography } from '../../constants/theme';
 
 type MileageHistoryStatus = 'credited' | 'pending' | 'rejected' | 'settled';
@@ -232,12 +231,8 @@ function MileageBalanceCard({ balance }: { balance?: number }) {
           </View>
         </View>
       </View>
-      <Image
-        accessibilityIgnoresInvertColors
+      <MileageWaterJugIcon
         accessibilityLabel="마일리지 물통 일러스트"
-        resizeMode="contain"
-        source={imageSources.mileageWaterJug}
-        style={styles.waterJug}
       />
     </View>
   );
@@ -566,12 +561,9 @@ function FilterOption({
 function MileageHistoryMessage({ loaded }: { loaded: boolean }) {
   return (
     <View accessibilityLiveRegion="polite" style={styles.historyMessage}>
-      <Image
-        accessibilityIgnoresInvertColors
+      <MileageWaterJugIcon
         accessibilityLabel="빈 마일리지 물통 일러스트"
-        resizeMode="contain"
-        source={imageSources.mileageWaterJugEmpty}
-        style={styles.emptyWaterJug}
+        variant="empty"
       />
       <View style={styles.historyMessageBadge}>
         <Text style={styles.historyMessageText}>
@@ -753,10 +745,6 @@ const styles = StyleSheet.create({
     ...typography.suitMedium16,
     color: colors.gray800,
   },
-  waterJug: {
-    width: 64,
-    height: 98,
-  },
   historySection: {
     width: '100%',
     gap: 20,
@@ -895,10 +883,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
     paddingVertical: 52,
-  },
-  emptyWaterJug: {
-    width: 64,
-    height: 98,
   },
   historyMessageBadge: {
     maxWidth: '100%',
