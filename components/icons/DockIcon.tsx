@@ -45,7 +45,7 @@ export function DockIcon({
   name: DockIconName;
 }) {
   const config = dockIconConfig[name];
-  const color = active ? colors.gray800 : colors.gray400;
+  const color = active ? colors.brand500 : colors.gray400;
 
   return (
     <View style={styles.frame}>
