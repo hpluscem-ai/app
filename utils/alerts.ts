@@ -141,6 +141,13 @@ export function showProfileServerPendingAlert() {
   );
 }
 
+export function showProfilePasswordResetServerPendingAlert() {
+  Alert.alert(
+    '비밀번호 재설정 이메일 서버 연동 필요',
+    '로그인된 사용자의 이메일로 재설정 링크를 발송하는 API가 정해진 뒤 요청을 연결합니다.',
+  );
+}
+
 export function showFindEmailServerPendingAlert() {
   Alert.alert(
     '이메일 찾기 서버 연동 필요',

@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 
 import { AppScreen } from '../components/AppScreen';
+import { NoticeModal } from '../components/NoticeModal';
 import { FormTextField } from '../components/auth/FormTextField';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
-import { colors, typography } from '../constants/theme';
 import { showResetPasswordServerPendingAlert } from '../utils/alerts';
 import {
   validatePassword,
@@ -33,36 +33,16 @@ function PasswordChangedModal({
   visible,
 }: PasswordChangedModalProps) {
   return (
-    <Modal
-      animationType="fade"
+    <NoticeModal
+      accessibilityLabel="비밀번호 변경 완료"
+      confirmLabel="로그인"
+      message={
+        '비밀번호 변경이 완료되었습니다.\n변경된 비밀번호로 로그인을 해주세요.'
+      }
+      onConfirm={onLogin}
       onRequestClose={() => undefined}
-      presentationStyle="overFullScreen"
-      transparent
       visible={visible}
-    >
-      <View style={styles.modalOverlay}>
-        <View
-          accessibilityLabel="비밀번호 변경 완료"
-          accessibilityRole="alert"
-          accessibilityViewIsModal
-          style={styles.modalCard}
-        >
-          <Text style={styles.modalMessage}>
-            비밀번호 변경이 완료되었습니다.{`\n`}변경된 비밀번호로 로그인을 해주세요.
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onLogin}
-            style={({ pressed }) => [
-              styles.modalButton,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={styles.modalButtonLabel}>로그인</Text>
-          </Pressable>
-        </View>
-      </View>
-    </Modal>
+    />
   );
 }
 
@@ -182,48 +162,5 @@ const styles = StyleSheet.create({
   },
   fields: {
     gap: 16,
-  },
-  modalOverlay: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 350,
-    minHeight: 146,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    gap: 18,
-    borderRadius: 32,
-    backgroundColor: colors.white,
-    padding: 20,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.04,
-    shadowRadius: 5,
-    elevation: 4,
-  },
-  modalMessage: {
-    ...typography.authBody,
-    width: '100%',
-    color: colors.gray800,
-  },
-  modalButton: {
-    minWidth: 69,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 24,
-    backgroundColor: colors.brand500,
-    paddingHorizontal: 16,
-  },
-  modalButtonLabel: {
-    ...typography.authBody,
-    color: colors.white,
-  },
-  pressed: {
-    opacity: 0.9,
   },
 });

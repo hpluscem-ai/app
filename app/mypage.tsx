@@ -1,8 +1,9 @@
-import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Controller, FormProvider, useForm } from 'react-hook-form';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppScreen } from '../components/AppScreen';
+import { NoticeModal } from '../components/NoticeModal';
 import { FormTextField } from '../components/auth/FormTextField';
 import { PhoneVerificationSection } from '../components/auth/PhoneVerificationSection';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
@@ -12,6 +13,7 @@ import {
   showKakaoVerificationCheckPendingAlert,
   showKakaoVerificationRequestPendingAlert,
   showPhoneVerificationRequiredAlert,
+  showProfilePasswordResetServerPendingAlert,
   showProfileServerPendingAlert,
 } from '../utils/alerts';
 import { formatName } from '../utils/inputFormat';
@@ -24,8 +26,58 @@ type MyPageFormValues = {
   marketingConsent: boolean;
 };
 
+type ProfileNotice =
+  | { email: string; type: 'password-reset-sent' }
+  | { type: 'profile-updated' };
+
+type ProfileNoticeModalProps = {
+  notice: ProfileNotice | null;
+  onConfirm: () => void;
+};
+
+async function requestProfilePasswordResetLink(): Promise<string | null> {
+  showProfilePasswordResetServerPendingAlert();
+  return null;
+}
+
+async function requestProfileUpdate(
+  _values: MyPageFormValues,
+): Promise<boolean> {
+  showProfileServerPendingAlert();
+  return false;
+}
+
+function ProfileNoticeModal({
+  notice,
+  onConfirm,
+}: ProfileNoticeModalProps) {
+  if (!notice) {
+    return null;
+  }
+
+  const isPasswordReset = notice.type === 'password-reset-sent';
+  const message = isPasswordReset
+    ? `비밀번호 재설정 링크가 발송되었습니다.\n${notice.email} 이메일의 메일함을 확인해주세요.`
+    : '정보가 변경되었습니다.';
+
+  return (
+    <NoticeModal
+      accessibilityLabel={
+        isPasswordReset
+          ? '비밀번호 재설정 링크 발송 완료'
+          : '정보 변경 완료'
+      }
+      confirmLabel="확인"
+      message={message}
+      onConfirm={onConfirm}
+      visible
+    />
+  );
+}
+
 export default function MyPageRoute() {
-  const router = useRouter();
+  const [isSendingResetLink, setIsSendingResetLink] = useState(false);
+  const [notice, setNotice] = useState<ProfileNotice | null>(null);
   const form = useForm<MyPageFormValues>({
     defaultValues: {
       marketingConsent: false,
@@ -39,7 +91,7 @@ export default function MyPageRoute() {
   });
   const {
     control,
-    formState: { errors },
+    formState: { errors, isSubmitting },
     handleSubmit,
     setFocus,
     watch,
@@ -49,13 +101,34 @@ export default function MyPageRoute() {
     'verificationCode',
     'verificationProof',
   ]);
-  const submitForm = handleSubmit(() => {
+  const requestPasswordResetLink = async () => {
+    if (isSendingResetLink) {
+      return;
+    }
+
+    setIsSendingResetLink(true);
+
+    try {
+      const email = await requestProfilePasswordResetLink();
+
+      if (email?.trim()) {
+        setNotice({ email, type: 'password-reset-sent' });
+      }
+    } finally {
+      setIsSendingResetLink(false);
+    }
+  };
+  const submitForm = handleSubmit(async (values) => {
     if ((phone || verificationCode) && !verificationProof) {
       showPhoneVerificationRequiredAlert();
       return;
     }
 
-    showProfileServerPendingAlert();
+    const updated = await requestProfileUpdate(values);
+
+    if (updated) {
+      setNotice({ type: 'profile-updated' });
+    }
   });
 
   return (
@@ -75,9 +148,12 @@ export default function MyPageRoute() {
               </View>
               <Pressable
                 accessibilityRole="button"
-                onPress={() => router.push('/reset-password')}
+                accessibilityState={{ disabled: isSendingResetLink }}
+                disabled={isSendingResetLink}
+                onPress={() => void requestPasswordResetLink()}
                 style={({ pressed }) => [
                   styles.passwordResetButton,
+                  isSendingResetLink && styles.disabled,
                   pressed && styles.pressed,
                 ]}
               >
@@ -149,10 +225,19 @@ export default function MyPageRoute() {
               </View>
             </View>
 
-            <PrimaryButton label="정보 변경하기" onPress={submitForm} />
+            <PrimaryButton
+              disabled={isSubmitting}
+              label="정보 변경하기"
+              onPress={submitForm}
+            />
           </View>
         </View>
       </AppScreen>
+
+      <ProfileNoticeModal
+        notice={notice}
+        onConfirm={() => setNotice(null)}
+      />
     </FormProvider>
   );
 }
@@ -234,6 +319,9 @@ const styles = StyleSheet.create({
   detailsText: {
     ...typography.authCaption,
     color: colors.gray600,
+  },
+  disabled: {
+    opacity: 0.45,
   },
   pressed: {
     opacity: 0.9,

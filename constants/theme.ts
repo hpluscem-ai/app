@@ -26,6 +26,7 @@ export const colors = {
   brand500: '#000047',
   mileageAction: '#4C69FE',
   mileageTint: '#EDF0FF',
+  overlayScrim: 'rgba(38, 44, 58, 0.28)',
   error: '#D92D20',
 } as const;
 
