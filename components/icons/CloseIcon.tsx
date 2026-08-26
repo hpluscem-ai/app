@@ -5,12 +5,12 @@ import { colors } from '../../constants/theme';
 
 export function CloseIcon() {
   return (
-    <Svg fill="none" height={10} viewBox="0 0 10 10" width={10}>
+    <Svg fill="none" height={16} viewBox="0 0 16 16" width={16}>
       <Path
         d={iconPaths.close}
         stroke={colors.gray800}
         strokeLinecap="round"
-        strokeWidth={2}
+        strokeWidth={1.5}
       />
     </Svg>
   );

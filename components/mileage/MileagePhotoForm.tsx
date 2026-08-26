@@ -25,6 +25,7 @@ export type MileagePhotoSelection = {
 };
 
 type MileagePhotoFormProps = {
+  fillAvailableSpace?: boolean;
   intro: string;
   onValidSubmit: (selection: MileagePhotoSelection) => void;
   requirement: MileagePhotoRequirement;
@@ -58,6 +59,7 @@ function isSupportedImageFormat(asset: ImagePicker.ImagePickerAsset) {
 }
 
 export function MileagePhotoForm({
+  fillAvailableSpace = false,
   intro,
   onValidSubmit,
   requirement,
@@ -154,7 +156,12 @@ export function MileagePhotoForm({
   const atLeastOneImageMissing = !receiptImage && !dashboardImage;
 
   return (
-    <View style={styles.pageContent}>
+    <View
+      style={[
+        styles.pageContent,
+        fillAvailableSpace && styles.pageContentFilled,
+      ]}
+    >
       <View style={styles.uploadSection}>
         <Text style={styles.intro}>{intro}</Text>
         <View style={styles.uploadRow}>
@@ -183,7 +190,9 @@ export function MileagePhotoForm({
         </View>
       </View>
 
-      <PrimaryButton label={submitLabel} onPress={submitImages} />
+      <View style={fillAvailableSpace ? styles.submitSection : undefined}>
+        <PrimaryButton label={submitLabel} onPress={submitImages} />
+      </View>
     </View>
   );
 }
@@ -194,13 +203,20 @@ const styles = StyleSheet.create({
     gap: 40,
     paddingVertical: 104,
   },
+  pageContentFilled: {
+    flexGrow: 1,
+    justifyContent: 'space-between',
+    gap: 0,
+    paddingTop: 32,
+    paddingBottom: 8,
+  },
   uploadSection: {
     width: '100%',
     gap: 20,
     paddingHorizontal: 20,
   },
   intro: {
-    ...typography.sectionTitle,
+    ...typography.suitSemiBold18,
     color: colors.black,
   },
   uploadRow: {
@@ -208,5 +224,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  submitSection: {
+    width: '100%',
+    paddingHorizontal: 20,
   },
 });
