@@ -133,7 +133,12 @@ export default function MyPageRoute() {
 
   return (
     <FormProvider {...form}>
-      <AppScreen activeTab="profile" dockMode="hidden" variant="main">
+      <AppScreen
+        activeTab="profile"
+        dockMode="fixed"
+        showFooter={false}
+        variant="main"
+      >
         <View style={styles.profileContent}>
           <View style={styles.form}>
             <View style={styles.fieldGroup}>
