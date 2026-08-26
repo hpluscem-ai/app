@@ -23,15 +23,18 @@ export default function MileageStatusRoute() {
   }
 
   const rejected = status === 'rejected';
-  const title = rejected ? '반려' : '대기';
+  const title = rejected ? '2026. 08. 01. 반려' : '대기';
 
   return (
     <>
-      <Stack.Screen options={{ title }} />
-      <AppScreen variant="plain">
+      <Stack.Screen
+        options={{ headerTitleStyle: typography.suitMedium16, title }}
+      />
+      <AppScreen showFooter={false} variant="plain">
         {rejected ? (
           <MileagePhotoForm
-            intro="반려 사유는 서버 연동 후 표시됩니다. 새 사진을 등록해 주세요."
+            fillAvailableSpace
+            intro="영수증 금액과 계기판 금액이 일치하지 않습니다. 다시 확인 후, 등록해주세요."
             onValidSubmit={showMileageReRegistrationServerPendingAlert}
             requirement="atLeastOne"
             submitLabel="재등록"
