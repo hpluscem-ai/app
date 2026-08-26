@@ -36,7 +36,7 @@ type MileageHistoryItem = {
 
 const historyStatus = {
   credited: {
-    backgroundColor: 'rgba(76, 150, 254, 0.1)',
+    backgroundColor: colors.blueTint,
     color: colors.blue500,
     label: '적립',
   },
@@ -51,8 +51,8 @@ const historyStatus = {
     label: '반려 · 사유보기',
   },
   settled: {
-    backgroundColor: 'rgba(0, 0, 71, 0.1)',
-    color: colors.brand500,
+    backgroundColor: colors.blueTint,
+    color: colors.blue500,
     label: '정산',
   },
 } as const;
@@ -60,9 +60,9 @@ const historyStatus = {
 const mockMileageHistory = [
   {
     dateLabel: '2026. 08. 01',
-    id: 'mock-rejected',
-    mileage: 20_000,
-    status: 'rejected',
+    id: 'mock-credited',
+    mileage: 40_000,
+    status: 'credited',
   },
   {
     dateLabel: '2026. 07. 31',
@@ -72,6 +72,12 @@ const mockMileageHistory = [
   },
   {
     dateLabel: '2026. 07. 10',
+    id: 'mock-rejected',
+    mileage: 20_000,
+    status: 'rejected',
+  },
+  {
+    dateLabel: '2026. 06. 30',
     id: 'mock-settled',
     mileage: 40_000,
     status: 'settled',
