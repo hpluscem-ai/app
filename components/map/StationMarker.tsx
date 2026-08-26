@@ -54,17 +54,17 @@ export function StationMarker({
 const styles = StyleSheet.create({
   marker: {
     minWidth: 28,
-    maxWidth: 164,
+    maxWidth: 220,
     height: 28,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 16,
     backgroundColor: colors.white,
     paddingHorizontal: 8,
-    shadowColor: colors.gray800,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.16,
-    shadowRadius: 8,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
     elevation: 4,
   },
   cluster: {
@@ -72,10 +72,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
   },
   selected: {
-    backgroundColor: colors.mileageAction,
+    backgroundColor: colors.brand500,
   },
   label: {
-    ...typography.body,
+    ...typography.suitMedium14,
     color: colors.gray800,
   },
   selectedLabel: {

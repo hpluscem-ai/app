@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AccessibilityInfo,
   Animated,
@@ -8,15 +9,14 @@ import {
   Text,
   View,
 } from 'react-native';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { MapStation } from '../../data/mapStations';
 import { colors, typography } from '../../constants/theme';
-import { CloseIcon } from '../icons/CloseIcon';
 import { DirectionsIcon } from '../icons/DirectionsIcon';
 
-const COLLAPSED_HEIGHT = 136;
-const EXPANDED_TOP_GAP = 24;
+export const STATION_SHEET_COLLAPSED_HEIGHT = 136;
+
+const EXPANDED_TOP_GAP = 8;
 const DRAG_THRESHOLD = 72;
 
 type SheetSnap = 'closed' | 'collapsed' | 'expanded';
@@ -44,7 +44,10 @@ export function StationSheet({
   onSelectStation,
   visible,
 }: StationSheetProps) {
-  const collapsedY = Math.max(EXPANDED_TOP_GAP, height - COLLAPSED_HEIGHT);
+  const collapsedY = Math.max(
+    EXPANDED_TOP_GAP,
+    height - STATION_SHEET_COLLAPSED_HEIGHT,
+  );
   const translateY = useRef(new Animated.Value(height)).current;
   const currentYRef = useRef(height);
   const contentScrollYRef = useRef(0);
@@ -68,13 +71,26 @@ export function StationSheet({
   }, [content]);
 
   useEffect(() => {
-    const subscription = translateY.addListener(({ value }) => {
+    let active = true;
+    const motionSubscription = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      setReduceMotion,
+    );
+    const translationSubscription = translateY.addListener(({ value }) => {
       currentYRef.current = value;
     });
 
-    void AccessibilityInfo.isReduceMotionEnabled().then(setReduceMotion);
+    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (active) {
+        setReduceMotion(enabled);
+      }
+    });
 
-    return () => translateY.removeListener(subscription);
+    return () => {
+      active = false;
+      motionSubscription.remove();
+      translateY.removeListener(translationSubscription);
+    };
   }, [translateY]);
 
   const snapTo = useCallback(
@@ -103,12 +119,12 @@ export function StationSheet({
 
   useEffect(() => {
     if (visible) {
-      snapTo('collapsed');
+      snapTo(content.kind === 'cluster' ? 'expanded' : 'collapsed');
       return;
     }
 
     snapTo('closed', () => onHiddenRef.current());
-  }, [snapTo, visible]);
+  }, [content, snapTo, visible]);
 
   const panResponder = useMemo(
     () =>
@@ -181,6 +197,8 @@ export function StationSheet({
   );
 
   const expanded = snap === 'expanded';
+  const stations =
+    content.kind === 'station' ? [content.station] : content.stations;
 
   return (
     <Animated.View
@@ -193,76 +211,78 @@ export function StationSheet({
           expanded ? '주유소 정보 접기' : '주유소 정보 펼치기'
         }
         accessibilityRole="button"
+        hitSlop={12}
         onPress={() => snapTo(expanded ? 'collapsed' : 'expanded')}
-        style={styles.handleArea}
+        style={styles.handleButton}
       >
         <View style={styles.handle} />
       </Pressable>
 
-      <Pressable
-        accessibilityLabel="주유소 정보 닫기"
-        accessibilityRole="button"
-        hitSlop={8}
-        onPress={onRequestClose}
-        style={({ pressed }) => [
-          styles.closeButton,
-          pressed && styles.pressed,
-        ]}
-      >
-        <CloseIcon />
-      </Pressable>
-
-      {content.kind === 'station' ? (
-        <StationDetail
-          expanded={expanded}
-          onContentScroll={(offsetY) => {
-            contentScrollYRef.current = offsetY;
-          }}
-          onDirections={onDirections}
-          station={content.station}
-        />
-      ) : (
-        <ClusterList
-          expanded={expanded}
-          onContentScroll={(offsetY) => {
-            contentScrollYRef.current = offsetY;
-          }}
-          onSelectStation={onSelectStation}
-          stations={content.stations}
-        />
-      )}
+      <StationList
+        expanded={expanded}
+        onContentScroll={(offsetY) => {
+          contentScrollYRef.current = offsetY;
+        }}
+        onDirections={onDirections}
+        onSelectStation={
+          content.kind === 'cluster' ? onSelectStation : undefined
+        }
+        stations={stations}
+      />
     </Animated.View>
   );
 }
 
-function StationDetail({
+function StationList({
   expanded,
   onContentScroll,
   onDirections,
-  station,
+  onSelectStation,
+  stations,
 }: {
   expanded: boolean;
   onContentScroll: (offsetY: number) => void;
   onDirections: (station: MapStation) => void;
+  onSelectStation?: (station: MapStation) => void;
+  stations: ReadonlyArray<MapStation>;
+}) {
+  return (
+    <ScrollView
+      contentContainerStyle={styles.stationList}
+      nestedScrollEnabled
+      onScroll={(event) => onContentScroll(event.nativeEvent.contentOffset.y)}
+      scrollEnabled={expanded}
+      scrollEventThrottle={16}
+      showsVerticalScrollIndicator={false}
+      style={styles.stationScroll}
+    >
+      {stations.map((station) => (
+        <StationCard
+          key={station.id}
+          onDirections={onDirections}
+          onSelect={onSelectStation}
+          station={station}
+        />
+      ))}
+    </ScrollView>
+  );
+}
+
+function StationCard({
+  onDirections,
+  onSelect,
+  station,
+}: {
+  onDirections: (station: MapStation) => void;
+  onSelect?: (station: MapStation) => void;
   station: MapStation;
 }) {
   const directionsDisabled = !station.coordinateVerified;
-
-  return (
-    <View style={styles.stationLayout}>
-      <ScrollView
-        contentContainerStyle={styles.stationText}
-        nestedScrollEnabled
-        onScroll={(event) =>
-          onContentScroll(event.nativeEvent.contentOffset.y)
-        }
-        scrollEnabled={expanded}
-        scrollEventThrottle={16}
-        showsVerticalScrollIndicator={false}
-        style={styles.stationScroll}
-      >
+  const stationCopy = (
+    <>
+      <View style={styles.stationHeading}>
         <View style={styles.titleRow}>
-          <Text numberOfLines={1} style={styles.stationTitle}>
+          <Text numberOfLines={1} style={styles.stationBusiness}>
             {station.pole} {station.businessName}
           </Text>
           {station.note ? (
@@ -277,16 +297,32 @@ function StationDetail({
             {device.model} / {device.capacity}
           </Text>
         ))}
+      </View>
 
-        <Text numberOfLines={1} style={styles.address}>
-          {station.roadAddress}
-        </Text>
-        {directionsDisabled ? (
-          <Text accessibilityLiveRegion="polite" style={styles.previewNotice}>
-            임시 좌표 · 실제 좌표 확인 후 길안내 가능
-          </Text>
-        ) : null}
-      </ScrollView>
+      <Text numberOfLines={1} style={styles.address}>
+        {station.roadAddress}
+      </Text>
+    </>
+  );
+
+  return (
+    <View style={styles.stationCard}>
+      {onSelect ? (
+        <Pressable
+          accessibilityHint="이 주유소를 지도에서 선택하고 확대합니다."
+          accessibilityLabel={`${station.pole} ${station.businessName}, ${station.roadAddress}`}
+          accessibilityRole="button"
+          onPress={() => onSelect(station)}
+          style={({ pressed }) => [
+            styles.stationCopy,
+            pressed && styles.pressed,
+          ]}
+        >
+          {stationCopy}
+        </Pressable>
+      ) : (
+        <View style={styles.stationCopy}>{stationCopy}</View>
+      )}
 
       <View style={styles.directionsArea}>
         <Pressable
@@ -308,58 +344,15 @@ function StationDetail({
         >
           <DirectionsIcon />
         </Pressable>
-        <Text style={styles.directionsLabel}>길안내</Text>
+        <Text
+          style={[
+            styles.directionsLabel,
+            directionsDisabled && styles.disabled,
+          ]}
+        >
+          길안내
+        </Text>
       </View>
-    </View>
-  );
-}
-
-function ClusterList({
-  expanded,
-  onContentScroll,
-  onSelectStation,
-  stations,
-}: {
-  expanded: boolean;
-  onContentScroll: (offsetY: number) => void;
-  onSelectStation: (station: MapStation) => void;
-  stations: ReadonlyArray<MapStation>;
-}) {
-  return (
-    <View style={styles.clusterContent}>
-      <Text accessibilityRole="header" style={styles.clusterTitle}>
-        이 지역의 설치 주유소 {stations.length}곳
-      </Text>
-      <ScrollView
-        nestedScrollEnabled
-        onScroll={(event) =>
-          onContentScroll(event.nativeEvent.contentOffset.y)
-        }
-        scrollEnabled={expanded}
-        scrollEventThrottle={16}
-        showsVerticalScrollIndicator={false}
-        style={styles.clusterScroll}
-      >
-        {stations.map((station) => (
-          <Pressable
-            accessibilityLabel={`${station.pole} ${station.businessName}, ${station.roadAddress}`}
-            accessibilityRole="button"
-            key={station.id}
-            onPress={() => onSelectStation(station)}
-            style={({ pressed }) => [
-              styles.stationRow,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text numberOfLines={1} style={styles.rowTitle}>
-              {station.pole} {station.businessName}
-            </Text>
-            <Text numberOfLines={1} style={styles.rowAddress}>
-              {station.roadAddress}
-            </Text>
-          </Pressable>
-        ))}
-      </ScrollView>
     </View>
   );
 }
@@ -371,85 +364,83 @@ const styles = StyleSheet.create({
     right: 0,
     left: 0,
     zIndex: 10,
+    gap: 20,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
     backgroundColor: colors.white,
-    shadowColor: colors.gray800,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  handleArea: {
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'flex-start',
     paddingTop: 4,
-  },
-  handle: {
-    width: 64,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: colors.gray200,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 0,
-    right: 8,
-    zIndex: 1,
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stationLayout: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: 16,
     paddingRight: 20,
     paddingBottom: 20,
     paddingLeft: 20,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 8,
   },
-  stationText: {
-    flexGrow: 1,
-    gap: 2,
-    paddingBottom: 12,
+  handleButton: {
+    width: 64,
+    height: 4,
+    alignSelf: 'center',
+  },
+  handle: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 4,
+    backgroundColor: colors.gray400,
   },
   stationScroll: {
     flex: 1,
   },
+  stationList: {
+    gap: 20,
+  },
+  stationCard: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+  },
+  stationCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 20,
+  },
+  stationHeading: {
+    alignItems: 'flex-start',
+  },
   titleRow: {
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  stationTitle: {
-    ...typography.body,
+  stationBusiness: {
+    ...typography.suitMedium14,
     flexShrink: 1,
     color: colors.gray800,
   },
   badge: {
-    borderRadius: 8,
-    backgroundColor: colors.mileageTint,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    flexShrink: 0,
+    borderRadius: 16,
+    backgroundColor: colors.blueTint,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   badgeLabel: {
     ...typography.caption,
-    color: colors.mileageAction,
+    color: colors.blue500,
   },
   device: {
-    ...typography.sectionTitle,
+    ...typography.suitSemiBold18,
     color: colors.gray800,
   },
   address: {
-    ...typography.caption,
+    ...typography.suitMedium12,
     color: colors.gray800,
   },
-  previewNotice: {
-    ...typography.caption,
-    color: colors.gray400,
-  },
   directionsArea: {
-    width: 48,
+    flexShrink: 0,
     alignItems: 'center',
     gap: 4,
   },
@@ -462,36 +453,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray50,
   },
   directionsLabel: {
-    ...typography.caption,
+    ...typography.suitMedium12,
     color: colors.gray800,
-  },
-  clusterContent: {
-    flex: 1,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  clusterTitle: {
-    ...typography.sectionTitle,
-    marginBottom: 8,
-    color: colors.gray800,
-  },
-  clusterScroll: {
-    flex: 1,
-  },
-  stationRow: {
-    minHeight: 64,
-    justifyContent: 'center',
-    gap: 4,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.gray200,
-  },
-  rowTitle: {
-    ...typography.body,
-    color: colors.gray800,
-  },
-  rowAddress: {
-    ...typography.caption,
-    color: colors.gray400,
   },
   disabled: {
     opacity: 0.36,

@@ -14,6 +14,7 @@ import Supercluster from 'supercluster';
 
 import { AppScreen } from '../components/AppScreen';
 import {
+  STATION_SHEET_COLLAPSED_HEIGHT,
   StationSheet,
   type StationSheetContent,
 } from '../components/map/StationSheet';
@@ -21,11 +22,11 @@ import { StationMarker } from '../components/map/StationMarker';
 import { colors, typography } from '../constants/theme';
 import {
   previewMapStations,
+  type MapCoordinate,
   type MapStation,
 } from '../data/mapStations';
 import { showTmapOpenFailedAlert } from '../utils/alerts';
 
-const MAP_HEIGHT = 540;
 const SEOUL_REGION: Region = {
   latitude: 37.5665,
   latitudeDelta: 1.1,
@@ -48,7 +49,6 @@ export default function MapRoute() {
   const [mapReady, setMapReady] = useState(false);
   const [locationEnabled, setLocationEnabled] = useState(false);
   const [region, setRegion] = useState(SEOUL_REGION);
-  const [screenScrollEnabled, setScreenScrollEnabled] = useState(true);
   const [selectedClusterId, setSelectedClusterId] = useState<number>();
   const [selectedStationId, setSelectedStationId] = useState<string>();
   const [sheetContent, setSheetContent] =
@@ -150,7 +150,7 @@ export default function MapRoute() {
   );
 
   const showCluster = useCallback(
-    (clusterId: number) => {
+    (clusterId: number, coordinate: MapCoordinate) => {
       const stations = clusterIndex
         .getLeaves(clusterId, Infinity)
         .map((feature) => stationById.get(feature.properties.stationId))
@@ -164,8 +164,28 @@ export default function MapRoute() {
       setSelectedStationId(undefined);
       setSheetContent({ kind: 'cluster', stations });
       setSheetVisible(true);
+
+      const expansionZoom = clusterIndex.getClusterExpansionZoom(clusterId);
+      const longitudeDelta = Math.min(
+        region.longitudeDelta,
+        360 / 2 ** expansionZoom,
+      );
+      const nextRegion: Region = {
+        latitude: coordinate.latitude,
+        latitudeDelta:
+          longitudeDelta * (region.latitudeDelta / region.longitudeDelta),
+        longitude: coordinate.longitude,
+        longitudeDelta,
+      };
+
+      mapRef.current?.animateToRegion(nextRegion, 350);
     },
-    [clusterIndex, stationById],
+    [
+      clusterIndex,
+      region.latitudeDelta,
+      region.longitudeDelta,
+      stationById,
+    ],
   );
 
   const requestSheetClose = useCallback(() => {
@@ -221,21 +241,25 @@ export default function MapRoute() {
   return (
     <AppScreen
       activeTab="map"
-      dockMode={sheetContent ? 'hidden' : 'overlay'}
-      scrollEnabled={screenScrollEnabled}
+      dockMode={sheetContent ? 'hidden' : 'fixed'}
+      dockOverContent
+      scrollEnabled={false}
+      showFooter={false}
       variant="main"
     >
       <View
         onLayout={handleMapLayout}
-        onTouchCancel={() => setScreenScrollEnabled(true)}
-        onTouchEnd={() => setScreenScrollEnabled(true)}
-        onTouchStart={() => setScreenScrollEnabled(false)}
         style={styles.mapFrame}
       >
         <MapView
           initialRegion={SEOUL_REGION}
           loadingEnabled
-          mapPadding={{ bottom: 72, left: 0, right: 0, top: 0 }}
+          mapPadding={{
+            bottom: sheetContent ? STATION_SHEET_COLLAPSED_HEIGHT : 72,
+            left: 0,
+            right: 0,
+            top: 0,
+          }}
           onMapReady={() => setMapReady(true)}
           onPress={requestSheetClose}
           onRegionChangeComplete={setRegion}
@@ -261,7 +285,9 @@ export default function MapRoute() {
                   count={feature.properties.point_count}
                   key={`cluster-${clusterId}-${selected}`}
                   label=""
-                  onPress={() => showCluster(clusterId)}
+                  onPress={() =>
+                    showCluster(clusterId, { latitude, longitude })
+                  }
                   selected={selected}
                 />
               );
@@ -279,8 +305,8 @@ export default function MapRoute() {
               <StationMarker
                 coordinate={station.coordinate}
                 key={`${station.id}-${selected}`}
-                label={`${station.pole} ${station.businessName}`}
-                onPress={() => showStation(station)}
+                label={getStationMarkerLabel(station)}
+                onPress={() => showStation(station, true)}
                 selected={selected}
               />
             );
@@ -342,10 +368,19 @@ function getZoom(region: Region) {
   return Math.max(0, Math.min(20, zoom));
 }
 
+function getStationMarkerLabel(station: MapStation) {
+  const device = station.devices[0];
+
+  return device
+    ? `${device.model} / ${device.capacity}`
+    : `${station.pole} ${station.businessName}`;
+}
+
 const styles = StyleSheet.create({
   mapFrame: {
+    flex: 1,
     width: '100%',
-    height: MAP_HEIGHT,
+    minHeight: 0,
     position: 'relative',
     overflow: 'hidden',
     backgroundColor: colors.gray100,
