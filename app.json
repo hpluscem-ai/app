@@ -37,6 +37,12 @@
           "cameraPermission": "영수증 및 계기판 사진을 촬영하기 위해 카메라에 접근합니다.",
           "microphonePermission": false
         }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "url": "https://sentry.io/"
+        }
       ]
     ],
     "extra": {

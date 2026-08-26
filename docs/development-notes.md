@@ -236,6 +236,15 @@
 - 검증 결과: `pnpm typecheck`와 `git diff --check`를 통과했다. 실제 카카오톡 인증, 이메일 조회·발송, 재설정 Token과 비밀번호 저장 API 성공 흐름은 서버 계약이 없어 실행하지 않았다.
 - 성능 및 생산성 수치: `[측정 필요]`.
 
+## 2026-08-24 — 배포 전 Sentry 골격
+
+- Expo 구성: SDK 57 권장 버전인 `@sentry/react-native` 7.11과 공식 config plugin, Sentry Metro 설정을 추가했다. 네이티브 오류와 JavaScript 소스맵을 연결할 수 있는 빌드 구조만 준비했으며 아직 Sentry 프로젝트나 실제 배포 환경에는 연결하지 않았다.
+- 활성화 경계: `EXPO_PUBLIC_SENTRY_DSN`이 있고 개발 빌드가 아닐 때만 이벤트 전송을 활성화한다. 값이 없는 현재 로컬 개발에서는 Sentry가 비활성화되며, 성능 추적과 Session Replay도 켜지 않는다.
+- 개인정보 경계: 기본 PII 전송, 화면 캡처와 View 계층 첨부를 비활성화했다. 인증을 연결할 때도 사용자 식별에는 내부 ID만 사용하고 이메일·연락처·인증번호·비밀번호·사진 경로·OCR 결과를 Sentry 사용자 정보, 태그와 breadcrumb에 넣지 않는다.
+- 배포 전 입력: EAS 환경에 공개 런타임 값 `EXPO_PUBLIC_SENTRY_DSN`, `EXPO_PUBLIC_SENTRY_ENVIRONMENT`와 빌드 전용 `SENTRY_ORG`, `SENTRY_PROJECT`를 설정하고, `SENTRY_AUTH_TOKEN`은 민감 정보로 저장한다. 값 이름은 `.env.example`에 빈 항목으로만 남겼다.
+- 배포 검증: 첫 Preview EAS Build에서 테스트 오류 한 건의 네이티브·JavaScript stack trace와 소스맵을 확인한다. EAS Update를 사용하기 시작하면 각 업데이트 뒤 `dist` 소스맵 업로드를 배포 절차에 포함하고 `expo-update-id` 태그로 빌드 내장 번들과 원격 업데이트를 구분한다.
+- 검증 결과: 값이 없는 상태에서 `pnpm typecheck`, `git diff --check`, 공개 Expo config와 Sentry Metro config 로딩을 통과했다. iOS·Android `expo export`도 각각 통과했으며, 실제 이벤트 수신과 소스맵 업로드는 Sentry 값과 Preview 빌드가 없으므로 배포 전 확인 항목으로 남겼다. `expo install --check`는 이번 Sentry 권장 버전과 무관하게 기존 Expo 패키지 6개의 패치 버전 차이로 실패했다.
+
 # 서버 요구사항 백로그
 
 서버 기술과 최종 API 형식은 아직 결정하지 않는다. 아래 항목은 구현한 앱 화면과 기획 설명에서 확인된 기능 요구사항이다.
