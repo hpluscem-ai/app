@@ -9,6 +9,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { MapStation } from '../../data/mapStations';
 import { colors, typography } from '../../constants/theme';
@@ -18,6 +19,7 @@ export const STATION_SHEET_COLLAPSED_HEIGHT = 136;
 
 const EXPANDED_TOP_GAP = 8;
 const DRAG_THRESHOLD = 72;
+const SHEET_BOTTOM_PADDING = 20;
 
 type SheetSnap = 'closed' | 'collapsed' | 'expanded';
 
@@ -44,9 +46,10 @@ export function StationSheet({
   onSelectStation,
   visible,
 }: StationSheetProps) {
+  const insets = useSafeAreaInsets();
   const collapsedY = Math.max(
     EXPANDED_TOP_GAP,
-    height - STATION_SHEET_COLLAPSED_HEIGHT,
+    height - STATION_SHEET_COLLAPSED_HEIGHT - insets.bottom,
   );
   const translateY = useRef(new Animated.Value(height)).current;
   const currentYRef = useRef(height);
@@ -203,7 +206,14 @@ export function StationSheet({
   return (
     <Animated.View
       accessibilityViewIsModal={expanded}
-      style={[styles.sheet, { height, transform: [{ translateY }] }]}
+      style={[
+        styles.sheet,
+        {
+          height,
+          paddingBottom: SHEET_BOTTOM_PADDING + insets.bottom,
+          transform: [{ translateY }],
+        },
+      ]}
       {...panResponder.panHandlers}
     >
       <Pressable
@@ -370,7 +380,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.white,
     paddingTop: 4,
     paddingRight: 20,
-    paddingBottom: 20,
+    paddingBottom: SHEET_BOTTOM_PADDING,
     paddingLeft: 20,
     shadowColor: colors.black,
     shadowOffset: { width: 0, height: -8 },

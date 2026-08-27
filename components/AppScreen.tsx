@@ -13,7 +13,10 @@ import {
   View,
   type ViewStyle,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from 'react-native-safe-area-context';
 
 import { imageSources } from '../constants/assets';
 import { colors, typography } from '../constants/theme';
@@ -38,6 +41,7 @@ type AppScreenProps =
       activeTab: MainTab;
       dockMode?: MainDockMode;
       dockOverContent?: boolean;
+      extendUnderBottomInset?: boolean;
       scrollEnabled?: boolean;
       variant: 'main';
     })
@@ -201,11 +205,15 @@ function ScreenScrollView({
 
 /** 화면 종류에 맞춰 공통 스크롤 영역, 상단 영역, 하단 메뉴와 푸터를 구성합니다. */
 export function AppScreen(props: AppScreenProps) {
+  const insets = useSafeAreaInsets();
   const blurTargetRef = useRef<View>(null);
   const isMain = props.variant === 'main';
   const dockMode = isMain ? (props.dockMode ?? 'fixed') : 'hidden';
   const hasFixedDock = isMain && dockMode === 'fixed';
   const dockOverContent = isMain ? (props.dockOverContent ?? false) : false;
+  const extendUnderBottomInset = isMain
+    ? (props.extendUnderBottomInset ?? false)
+    : false;
   const insetForDock = hasFixedDock && !dockOverContent;
   const scrollEnabled = isMain ? (props.scrollEnabled ?? true) : true;
   const showFooter = props.showFooter ?? true;
@@ -229,7 +237,9 @@ export function AppScreen(props: AppScreenProps) {
     <SafeAreaView
       edges={
         isMain
-          ? ['top', 'left', 'right', 'bottom']
+          ? extendUnderBottomInset
+            ? ['top', 'left', 'right']
+            : ['top', 'left', 'right', 'bottom']
           : ['left', 'right', 'bottom']
       }
       style={styles.safeArea}
@@ -250,7 +260,13 @@ export function AppScreen(props: AppScreenProps) {
               </ScreenScrollView>
             </BlurTargetView>
             {hasFixedDock ? (
-              <View pointerEvents="box-none" style={styles.fixedDock}>
+              <View
+                pointerEvents="box-none"
+                style={[
+                  styles.fixedDock,
+                  extendUnderBottomInset && { bottom: insets.bottom },
+                ]}
+              >
                 <DockBar
                   activeTab={props.activeTab}
                   blurTarget={blurTargetRef}

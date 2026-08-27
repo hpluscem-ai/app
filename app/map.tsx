@@ -10,6 +10,7 @@ import {
   type LayoutChangeEvent,
 } from 'react-native';
 import MapView, { type Region } from 'react-native-maps';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Supercluster from 'supercluster';
 
 import { AppScreen } from '../components/AppScreen';
@@ -44,6 +45,7 @@ type VisibleFeature =
   | Supercluster.PointFeature<StationPointProperties>;
 
 export default function MapRoute() {
+  const insets = useSafeAreaInsets();
   const mapRef = useRef<MapView>(null);
   const [mapHeight, setMapHeight] = useState(0);
   const [mapReady, setMapReady] = useState(false);
@@ -243,6 +245,7 @@ export default function MapRoute() {
       activeTab="map"
       dockMode={sheetContent ? 'hidden' : 'fixed'}
       dockOverContent
+      extendUnderBottomInset
       scrollEnabled={false}
       showFooter={false}
       variant="main"
@@ -255,7 +258,9 @@ export default function MapRoute() {
           initialRegion={SEOUL_REGION}
           loadingEnabled
           mapPadding={{
-            bottom: sheetContent ? STATION_SHEET_COLLAPSED_HEIGHT : 72,
+            bottom:
+              (sheetContent ? STATION_SHEET_COLLAPSED_HEIGHT : 72) +
+              insets.bottom,
             left: 0,
             right: 0,
             top: 0,
@@ -317,14 +322,6 @@ export default function MapRoute() {
           <View pointerEvents="none" style={styles.loadingOverlay}>
             <ActivityIndicator color={colors.mileageAction} />
             <Text style={styles.loadingLabel}>지도를 불러오고 있습니다.</Text>
-          </View>
-        ) : null}
-
-        {mapReady && visibleFeatures.length === 0 ? (
-          <View pointerEvents="none" style={styles.emptyOverlay}>
-            <Text style={styles.emptyLabel}>
-              현재 지도 범위에 설치 주유소가 없습니다.
-            </Text>
           </View>
         ) : null}
 
@@ -397,20 +394,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.gray50,
   },
   loadingLabel: {
-    ...typography.body,
-    color: colors.gray800,
-  },
-  emptyOverlay: {
-    position: 'absolute',
-    top: 20,
-    right: 20,
-    left: 20,
-    alignItems: 'center',
-    borderRadius: 12,
-    backgroundColor: colors.white,
-    padding: 16,
-  },
-  emptyLabel: {
     ...typography.body,
     color: colors.gray800,
   },
