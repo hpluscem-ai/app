@@ -1,20 +1,35 @@
 import { Image, StyleSheet, Text, View } from 'react-native';
+import Svg, { Line } from 'react-native-svg';
 
 import { imageSources } from '../../constants/assets';
 import { colors, typography } from '../../constants/theme';
 
 export function AppFooter() {
+  const divider = (
+    <Svg aria-hidden height={1} width="100%">
+      <Line
+        x1={0}
+        y1={0.5}
+        x2="100%"
+        y2={0.5}
+        stroke={colors.gray200}
+        strokeWidth={1}
+        strokeDasharray="2 2"
+      />
+    </Svg>
+  );
+
   return (
     <View style={styles.footer}>
       <Image
         accessibilityIgnoresInvertColors
-        accessibilityLabel="에이치플러스에코 로고"
+        accessibilityLabel="하얀100 로고"
         resizeMode="contain"
-        source={imageSources.hplusEcoLogo}
+        source={imageSources.hayan100FooterLogo}
         style={styles.footerLogo}
       />
 
-      <View style={styles.divider} />
+      {divider}
 
       <View style={styles.footerLegal}>
         <Text style={styles.footerText}>이용약관</Text>
@@ -28,7 +43,7 @@ export function AppFooter() {
         </View>
       </View>
 
-      <View style={styles.divider} />
+      {divider}
 
       <View style={styles.footerGroup}>
         <Text style={styles.footerText}>에이치플러스에코</Text>
@@ -57,13 +72,8 @@ const styles = StyleSheet.create({
     paddingVertical: 52,
   },
   footerLogo: {
-    width: 91,
+    width: 162,
     height: 24,
-  },
-  divider: {
-    width: '100%',
-    height: 1,
-    backgroundColor: colors.gray200,
   },
   footerLegal: {
     width: '100%',

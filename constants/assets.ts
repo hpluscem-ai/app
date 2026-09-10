@@ -1,6 +1,6 @@
 export const imageSources = {
   hayan100Logo: require('../assets/hayan100-logo.png'),
-  hplusEcoLogo: require('../assets/hplus-eco-logo.png'),
+  hayan100FooterLogo: require('../assets/hayan100-footer-logo.png'),
 } as const;
 
 export const svgMarkup = {
