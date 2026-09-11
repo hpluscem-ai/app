@@ -1,5 +1,11 @@
 import type { TextStyle } from 'react-native';
 
+export const webAppFrame = {
+  width: '100%',
+  maxWidth: 640,
+  alignSelf: 'center',
+} as const;
+
 type TypographyToken = Pick<
   TextStyle,
   'fontFamily' | 'fontSize' | 'fontWeight' | 'letterSpacing' | 'lineHeight'
