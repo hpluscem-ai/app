@@ -1,12 +1,15 @@
+import { useRef } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Controller, useForm } from 'react-hook-form';
 
 import { AppScreen } from '../components/AppScreen';
+import { useAuth } from '../components/AuthProvider';
 import { FormTextField } from '../components/auth/FormTextField';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
 import { colors, typography } from '../constants/theme';
-import { showLoginServerPendingAlert } from '../utils/alerts';
+import { useAlerts } from '../utils/alerts';
+import { AuthApiError, getAuthErrorMessage } from '../utils/authApi';
 import { validateEmail, validatePassword } from '../utils/validation';
 
 type LoginFormValues = {
@@ -15,11 +18,16 @@ type LoginFormValues = {
 };
 
 export default function LoginRoute() {
+  const { showAuthErrorAlert } = useAlerts();
+
   const router = useRouter();
+  const { signIn } = useAuth();
+  const submissionInFlight = useRef(false);
   const {
     control,
-    formState: { errors },
+    formState: { errors, isSubmitting },
     handleSubmit,
+    setError,
     setFocus,
   } = useForm<LoginFormValues>({
     defaultValues: {
@@ -30,14 +38,47 @@ export default function LoginRoute() {
     reValidateMode: 'onChange',
   });
 
-  const submitForm = handleSubmit(showLoginServerPendingAlert);
+  const submitValidForm = handleSubmit(async (values) => {
+    try {
+      await signIn(values);
+    } catch (error) {
+      if (
+        error instanceof AuthApiError &&
+        error.code === 'INVALID_CREDENTIALS'
+      ) {
+        setError(
+          'password',
+          { type: 'server', message: error.message },
+          { shouldFocus: true },
+        );
+      } else if (
+        error instanceof AuthApiError &&
+        error.code === 'VALIDATION_ERROR'
+      ) {
+        const field = error.fields.includes('email') ? 'email' : 'password';
+        setError(
+          field,
+          { type: 'server', message: error.message },
+          { shouldFocus: true },
+        );
+      } else {
+        showAuthErrorAlert(getAuthErrorMessage(error));
+      }
+    }
+  });
+
+  const submitForm = async () => {
+    if (submissionInFlight.current) return;
+    submissionInFlight.current = true;
+    try {
+      await submitValidForm();
+    } finally {
+      submissionInFlight.current = false;
+    }
+  };
 
   return (
-    <AppScreen
-      contentStyle={styles.authContent}
-      title="로그인"
-      variant="auth"
-    >
+    <AppScreen contentStyle={styles.authContent} title="로그인" variant="auth">
       <View style={styles.form}>
         <View style={styles.fields}>
           <Controller
@@ -47,6 +88,7 @@ export default function LoginRoute() {
               <FormTextField
                 accessibilityLabel="이메일"
                 autoComplete="email"
+                editable={!isSubmitting}
                 error={errors.email?.message}
                 inputRef={ref}
                 keyboardType="email-address"
@@ -69,6 +111,7 @@ export default function LoginRoute() {
               <FormTextField
                 accessibilityLabel="비밀번호"
                 autoComplete="current-password"
+                editable={!isSubmitting}
                 error={errors.password?.message}
                 inputRef={ref}
                 label="비밀번호"
@@ -87,11 +130,17 @@ export default function LoginRoute() {
         </View>
 
         <View style={styles.actions}>
-          <PrimaryButton label="로그인" onPress={submitForm} />
+          <PrimaryButton
+            disabled={isSubmitting}
+            label="로그인"
+            onPress={submitForm}
+          />
 
           <View accessibilityLabel="계정 관련 메뉴" style={styles.linkRow}>
             <Pressable
               accessibilityRole="button"
+              accessibilityState={{ disabled: isSubmitting }}
+              disabled={isSubmitting}
               hitSlop={12}
               onPress={() => router.push('/sign-up')}
             >
@@ -100,6 +149,8 @@ export default function LoginRoute() {
             <Text style={styles.linkText}> · </Text>
             <Pressable
               accessibilityRole="button"
+              accessibilityState={{ disabled: isSubmitting }}
+              disabled={isSubmitting}
               hitSlop={12}
               onPress={() => router.push('/find-email')}
             >
@@ -108,6 +159,8 @@ export default function LoginRoute() {
             <Text style={styles.linkText}> · </Text>
             <Pressable
               accessibilityRole="button"
+              accessibilityState={{ disabled: isSubmitting }}
+              disabled={isSubmitting}
               hitSlop={12}
               onPress={() => router.push('/find-password')}
             >
