@@ -6,10 +6,13 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as Updates from 'expo-updates';
 import { PaperProvider } from 'react-native-paper';
+import { Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppBar } from '../components/AppBar';
-import { typography } from '../constants/theme';
+import { AuthProvider, useAuth } from '../components/AuthProvider';
+import { NoticeProvider } from '../components/NoticeProvider';
+import { typography, webAppFrame } from '../constants/theme';
 
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN?.trim();
 const sentryEnabled = !__DEV__ && Boolean(sentryDsn);
@@ -20,8 +23,7 @@ Sentry.init({
   dsn: sentryDsn,
   enableAutoPerformanceTracing: false,
   enabled: sentryEnabled,
-  environment:
-    process.env.EXPO_PUBLIC_SENTRY_ENVIRONMENT?.trim() || undefined,
+  environment: process.env.EXPO_PUBLIC_SENTRY_ENVIRONMENT?.trim() || undefined,
   sendDefaultPii: false,
   tracesSampleRate: 0,
 });
@@ -33,7 +35,8 @@ if (sentryEnabled) {
 
 void SplashScreen.preventAutoHideAsync();
 
-function RootLayout() {
+function RootNavigator() {
+  const { state } = useAuth();
   const [fontsLoaded, fontError] = useFonts({
     'Inter-Bold': require('../assets/fonts/Inter-Bold.ttf'),
     'Inter-Medium': require('../assets/fonts/Inter-Medium.ttf'),
@@ -42,12 +45,12 @@ function RootLayout() {
   });
 
   useEffect(() => {
-    if (fontsLoaded || fontError) {
+    if ((fontsLoaded || fontError) && state.status !== 'restoring') {
       void SplashScreen.hideAsync();
     }
-  }, [fontError, fontsLoaded]);
+  }, [fontError, fontsLoaded, state.status]);
 
-  if (!fontsLoaded && !fontError) {
+  if ((!fontsLoaded && !fontError) || state.status === 'restoring') {
     return null;
   }
 
@@ -68,35 +71,61 @@ function RootLayout() {
           }}
         >
           <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="login" options={{ title: '로그인' }} />
-          <Stack.Screen name="sign-up" options={{ title: '회원가입' }} />
-          <Stack.Screen
-            name="find-email"
-            options={{ title: '이메일 찾기' }}
-          />
-          <Stack.Screen
-            name="find-password"
-            options={{ title: '비밀번호 찾기' }}
-          />
-          <Stack.Screen
-            name="reset-password"
-            options={{ title: '비밀번호 재설정' }}
-          />
-          <Stack.Screen name="mypage" options={{ headerShown: false }} />
-          <Stack.Screen name="map" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="mileage/index"
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen
-            name="mileage/apply"
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen name="mileage/[status]" />
+          <Stack.Protected guard={state.status === 'signedOut'}>
+            <Stack.Screen name="login" options={{ title: '로그인' }} />
+            <Stack.Screen name="sign-up" options={{ title: '회원가입' }} />
+            <Stack.Screen
+              name="find-email"
+              options={{ title: '이메일 찾기' }}
+            />
+            <Stack.Screen
+              name="find-password"
+              options={{ title: '비밀번호 찾기' }}
+            />
+            <Stack.Screen
+              name="reset-password"
+              options={{ title: '비밀번호 재설정' }}
+            />
+          </Stack.Protected>
+          <Stack.Protected guard={state.status === 'signedIn'}>
+            <Stack.Screen
+              name="mypage"
+              options={{ animation: 'none', headerShown: false }}
+            />
+            <Stack.Screen
+              name="map"
+              options={{ animation: 'none', headerShown: false }}
+            />
+            <Stack.Screen
+              name="mileage/index"
+              options={{ animation: 'none', headerShown: false }}
+            />
+            <Stack.Screen
+              name="mileage/apply"
+              options={{ animation: 'none', headerShown: false }}
+            />
+            <Stack.Screen name="mileage/[status]" />
+          </Stack.Protected>
         </Stack>
       </PaperProvider>
     </SafeAreaProvider>
   );
 }
+
+function RootLayout() {
+  return (
+    <View style={[styles.root, Platform.OS === 'web' && webAppFrame]}>
+      <AuthProvider>
+        <NoticeProvider>
+          <RootNavigator />
+        </NoticeProvider>
+      </AuthProvider>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+});
 
 export default Sentry.wrap(RootLayout);
