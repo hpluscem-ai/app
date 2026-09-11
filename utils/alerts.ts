@@ -1,11 +1,14 @@
+import { useMemo } from 'react';
 import { ActionSheetIOS, Alert, Platform } from 'react-native';
+
+import { useNotice } from '../components/NoticeProvider';
 
 type ImageSourceActions = {
   onCamera: () => void;
   onLibrary: () => void;
 };
 
-export function showImageSourceActions({
+function showNativeImageSourceActions({
   onCamera,
   onLibrary,
 }: ImageSourceActions) {
@@ -34,144 +37,161 @@ export function showImageSourceActions({
   ]);
 }
 
-export function showCameraPermissionAlert() {
-  Alert.alert(
-    '카메라 권한이 필요합니다.',
-    '사진을 촬영하려면 설정에서 카메라 접근을 허용해주세요.',
-  );
-}
+export function useAlerts() {
+  const showNotice = useNotice();
+  return useMemo(() => {
+    function showImageSourceActions(actions: ImageSourceActions) {
+      if (Platform.OS !== 'web') {
+        showNativeImageSourceActions(actions);
+        return;
+      }
+      actions.onLibrary();
+    }
 
-export function showImagePickerErrorAlert() {
-  Alert.alert(
-    '사진을 불러오지 못했습니다.',
-    '잠시 후 다시 시도해주세요.',
-  );
-}
+    const notify = (
+      title: string,
+      message: string,
+      onConfirm?: () => void,
+      cancelable = true,
+    ) => {
+      showNotice({ title, message, onConfirm, cancelable });
+    };
 
-export function showImageSizeLimitAlert() {
-  Alert.alert('사진 용량 초과', '50MB 이하의 이미지만 등록할 수 있습니다.');
-}
+    function showCameraPermissionAlert() {
+      notify(
+        '카메라 권한이 필요합니다.',
+        '사진을 촬영하려면 설정에서 카메라 접근을 허용해주세요.',
+      );
+    }
 
-export function showImageSizeUnavailableAlert() {
-  Alert.alert(
-    '사진 용량 확인 필요',
-    '파일 용량을 확인할 수 없는 이미지는 등록할 수 없습니다.',
-  );
-}
+    function showImagePickerErrorAlert() {
+      notify('사진을 불러오지 못했습니다.', '잠시 후 다시 시도해주세요.');
+    }
 
-export function showUnsupportedImageFormatAlert() {
-  Alert.alert(
-    '지원하지 않는 이미지 형식',
-    'JPG, PNG, HEIC 또는 HEIF 이미지를 선택해주세요.',
-  );
-}
+    function showImageSizeLimitAlert() {
+      notify('사진 용량 초과', '50MB 이하의 이미지만 등록할 수 있습니다.');
+    }
 
-export function showMileageImagesRequiredAlert() {
-  Alert.alert(
-    '사진을 확인해주세요.',
-    '영수증과 계기판 사진을 모두 등록해주세요.',
-  );
-}
+    function showImageSizeUnavailableAlert() {
+      notify(
+        '사진 용량 확인 필요',
+        '파일 용량을 확인할 수 없는 이미지는 등록할 수 없습니다.',
+      );
+    }
 
-export function showMileageAtLeastOneImageRequiredAlert() {
-  Alert.alert('사진을 확인해주세요.', '재등록할 사진을 한 장 이상 등록해주세요.');
-}
+    function showUnsupportedImageFormatAlert() {
+      notify(
+        '지원하지 않는 이미지 형식',
+        'JPG, PNG, HEIC 또는 HEIF 이미지를 선택해주세요.',
+      );
+    }
 
-export function showMileageServerPendingAlert() {
-  Alert.alert(
-    '마일리지 적립 서버 연동 필요',
-    '사진 업로드와 적립 신청 API가 정해진 뒤 등록 요청을 연결합니다.',
-  );
-}
+    function showMileageImagesRequiredAlert() {
+      notify(
+        '사진을 확인해주세요.',
+        '영수증과 계기판 사진을 모두 등록해주세요.',
+      );
+    }
 
-export function showMileageReRegistrationServerPendingAlert() {
-  Alert.alert(
-    '마일리지 재등록 서버 연동 필요',
-    '재등록 사진 업로드와 적립 신청 API가 정해진 뒤 재등록 요청을 연결합니다.',
-  );
-}
+    function showMileageAtLeastOneImageRequiredAlert() {
+      notify(
+        '사진을 확인해주세요.',
+        '재등록할 사진을 한 장 이상 등록해주세요.',
+      );
+    }
 
-export function showLoginServerPendingAlert() {
-  Alert.alert(
-    '로그인 입력 확인 완료',
-    '서버 연동 전이라 로그인 요청은 전송하지 않습니다.',
-  );
-}
+    function showMileageServerPendingAlert() {
+      notify(
+        '마일리지 적립 서버 연동 필요',
+        '사진 업로드와 적립 신청 API가 정해진 뒤 등록 요청을 연결합니다.',
+      );
+    }
 
-export function showSignUpServerPendingAlert() {
-  Alert.alert(
-    '회원가입 서버 연동 필요',
-    '소속 목록, 카카오톡 휴대폰 인증, 중복 확인과 계정 생성 API가 정해진 뒤 가입 요청을 연결합니다.',
-  );
-}
+    function showMileageReRegistrationServerPendingAlert() {
+      notify(
+        '마일리지 재등록 서버 연동 필요',
+        '재등록 사진 업로드와 적립 신청 API가 정해진 뒤 재등록 요청을 연결합니다.',
+      );
+    }
 
-export function showOrganizationPendingAlert() {
-  Alert.alert(
-    '소속 목록 준비 중',
-    '소속과 서비스 가격·기간을 제공할 서버 API가 정해진 뒤 선택 목록을 연결합니다.',
-  );
-}
+    function showAuthErrorAlert(message: string) {
+      notify('요청을 확인해주세요.', message);
+    }
 
-export function showKakaoVerificationRequestPendingAlert() {
-  Alert.alert(
-    '인증번호 발송 준비 중',
-    '카카오톡 인증번호 발송은 서버 연동 후 동작합니다.',
-  );
+    function showSignupSuccessAlert(onConfirm: () => void) {
+      notify('회원가입 완료', '회원가입이 완료되었습니다.', onConfirm, false);
+    }
 
-  return { status: 'unavailable' } as const;
-}
+    function showKakaoVerificationRequestPendingAlert() {
+      notify(
+        '인증번호 발송 준비 중',
+        '카카오톡 인증번호 발송은 서버 연동 후 동작합니다.',
+      );
 
-export function showKakaoVerificationCheckPendingAlert() {
-  Alert.alert(
-    '인증번호 확인 준비 중',
-    '인증번호 확인과 인증 증명 발급은 서버 연동 후 동작합니다.',
-  );
+      return { status: 'unavailable' } as const;
+    }
 
-  return { status: 'unavailable' } as const;
-}
+    function showKakaoVerificationCheckPendingAlert() {
+      notify(
+        '인증번호 확인 준비 중',
+        '인증번호 확인과 인증 증명 발급은 서버 연동 후 동작합니다.',
+      );
 
-export function showPhoneVerificationRequiredAlert() {
-  Alert.alert('휴대폰 인증 필요', '인증번호 확인을 완료해주세요.');
-}
+      return { status: 'unavailable' } as const;
+    }
 
-export function showProfileServerPendingAlert() {
-  Alert.alert(
-    '정보 변경 서버 연동 필요',
-    '내 정보 저장 API가 정해진 뒤 변경 요청을 연결합니다.',
-  );
-}
+    function showPhoneVerificationRequiredAlert() {
+      notify('휴대폰 인증 필요', '인증번호 확인을 완료해주세요.');
+    }
 
-export function showProfilePasswordResetServerPendingAlert() {
-  Alert.alert(
-    '비밀번호 재설정 이메일 서버 연동 필요',
-    '로그인된 사용자의 이메일로 재설정 링크를 발송하는 API가 정해진 뒤 요청을 연결합니다.',
-  );
-}
+    function showProfileServerPendingAlert() {
+      notify(
+        '정보 변경 서버 연동 필요',
+        '내 정보 저장 API가 정해진 뒤 변경 요청을 연결합니다.',
+      );
+    }
 
-export function showFindEmailServerPendingAlert() {
-  Alert.alert(
-    '이메일 찾기 서버 연동 필요',
-    '카카오톡 본인 인증과 가입 이메일 조회 API가 정해진 뒤 결과를 연결합니다.',
-  );
-}
+    function showProfilePasswordResetServerPendingAlert() {
+      notify(
+        '비밀번호 재설정 이메일 서버 연동 필요',
+        '로그인된 사용자의 이메일로 재설정 링크를 발송하는 API가 정해진 뒤 요청을 연결합니다.',
+      );
+    }
 
-export function showFindPasswordServerPendingAlert() {
-  Alert.alert(
-    '비밀번호 찾기 서버 연동 필요',
-    '카카오톡 본인 인증과 비밀번호 재설정 링크 발송 API가 정해진 뒤 결과를 연결합니다.',
-  );
-}
+    function showResetPasswordServerPendingAlert() {
+      notify(
+        '비밀번호 변경 서버 연동 필요',
+        '재설정 Token 검증과 비밀번호 변경 API가 정해진 뒤 변경 요청을 연결합니다.',
+      );
+    }
 
-export function showResetPasswordServerPendingAlert() {
-  Alert.alert(
-    '비밀번호 변경 서버 연동 필요',
-    '재설정 Token 검증과 비밀번호 변경 API가 정해진 뒤 변경 요청을 연결합니다.',
-  );
-}
+    function showTmapOpenFailedAlert() {
+      notify(
+        '티맵을 열 수 없습니다.',
+        '티맵 또는 앱 스토어를 열지 못했습니다. 잠시 후 다시 시도해주세요.',
+      );
+    }
 
-export function showTmapOpenFailedAlert() {
-  Alert.alert(
-    '티맵을 열 수 없습니다.',
-    '티맵 또는 앱 스토어를 열지 못했습니다. 잠시 후 다시 시도해주세요.',
-  );
+    return {
+      showImageSourceActions,
+      showCameraPermissionAlert,
+      showImagePickerErrorAlert,
+      showImageSizeLimitAlert,
+      showImageSizeUnavailableAlert,
+      showUnsupportedImageFormatAlert,
+      showMileageImagesRequiredAlert,
+      showMileageAtLeastOneImageRequiredAlert,
+      showMileageServerPendingAlert,
+      showMileageReRegistrationServerPendingAlert,
+      showAuthErrorAlert,
+      showSignupSuccessAlert,
+      showKakaoVerificationRequestPendingAlert,
+      showKakaoVerificationCheckPendingAlert,
+      showPhoneVerificationRequiredAlert,
+      showProfileServerPendingAlert,
+      showProfilePasswordResetServerPendingAlert,
+      showResetPasswordServerPendingAlert,
+      showTmapOpenFailedAlert,
+    };
+  }, [showNotice]);
 }

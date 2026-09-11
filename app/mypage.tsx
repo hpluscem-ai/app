@@ -1,21 +1,17 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Controller, FormProvider, useForm } from 'react-hook-form';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { AppScreen } from '../components/AppScreen';
+import { useAuth } from '../components/AuthProvider';
 import { NoticeModal } from '../components/NoticeModal';
 import { FormTextField } from '../components/auth/FormTextField';
 import { PhoneVerificationSection } from '../components/auth/PhoneVerificationSection';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
 import { CheckSquareIcon } from '../components/icons/CheckSquareIcon';
 import { colors, typography } from '../constants/theme';
-import {
-  showKakaoVerificationCheckPendingAlert,
-  showKakaoVerificationRequestPendingAlert,
-  showPhoneVerificationRequiredAlert,
-  showProfilePasswordResetServerPendingAlert,
-  showProfileServerPendingAlert,
-} from '../utils/alerts';
+import { useAlerts } from '../utils/alerts';
+import { getAuthErrorMessage } from '../utils/authApi';
 import { formatName } from '../utils/inputFormat';
 
 type MyPageFormValues = {
@@ -27,30 +23,14 @@ type MyPageFormValues = {
 };
 
 type ProfileNotice =
-  | { email: string; type: 'password-reset-sent' }
-  | { type: 'profile-updated' };
+  { email: string; type: 'password-reset-sent' } | { type: 'profile-updated' };
 
 type ProfileNoticeModalProps = {
   notice: ProfileNotice | null;
   onConfirm: () => void;
 };
 
-async function requestProfilePasswordResetLink(): Promise<string | null> {
-  showProfilePasswordResetServerPendingAlert();
-  return null;
-}
-
-async function requestProfileUpdate(
-  _values: MyPageFormValues,
-): Promise<boolean> {
-  showProfileServerPendingAlert();
-  return false;
-}
-
-function ProfileNoticeModal({
-  notice,
-  onConfirm,
-}: ProfileNoticeModalProps) {
+function ProfileNoticeModal({ notice, onConfirm }: ProfileNoticeModalProps) {
   if (!notice) {
     return null;
   }
@@ -63,9 +43,7 @@ function ProfileNoticeModal({
   return (
     <NoticeModal
       accessibilityLabel={
-        isPasswordReset
-          ? '비밀번호 재설정 링크 발송 완료'
-          : '정보 변경 완료'
+        isPasswordReset ? '비밀번호 재설정 링크 발송 완료' : '정보 변경 완료'
       }
       confirmLabel="확인"
       message={message}
@@ -76,8 +54,48 @@ function ProfileNoticeModal({
 }
 
 export default function MyPageRoute() {
+  const { signOut, withdraw } = useAuth();
+  const {
+    showAuthErrorAlert,
+    showKakaoVerificationCheckPendingAlert,
+    showKakaoVerificationRequestPendingAlert,
+    showPhoneVerificationRequiredAlert,
+    showProfilePasswordResetServerPendingAlert,
+    showProfileServerPendingAlert,
+  } = useAlerts();
+  async function requestProfilePasswordResetLink(): Promise<string | null> {
+    showProfilePasswordResetServerPendingAlert();
+    return null;
+  }
+
+  async function requestProfileUpdate(
+    _values: MyPageFormValues,
+  ): Promise<boolean> {
+    showProfileServerPendingAlert();
+    return false;
+  }
+
   const [isSendingResetLink, setIsSendingResetLink] = useState(false);
   const [notice, setNotice] = useState<ProfileNotice | null>(null);
+  const [accountAction, setAccountAction] = useState<'logout' | 'withdraw' | null>(null);
+  const [isProcessingAccount, setIsProcessingAccount] = useState(false);
+  const accountRequestInFlight = useRef(false);
+  const isWithdrawal = accountAction === 'withdraw';
+  const confirmAccountAction = async () => {
+    if (!accountAction || accountRequestInFlight.current) return;
+    accountRequestInFlight.current = true;
+    setIsProcessingAccount(true);
+    try {
+      await (isWithdrawal ? withdraw() : signOut());
+      setAccountAction(null);
+    } catch (error) {
+      setAccountAction(null);
+      showAuthErrorAlert(getAuthErrorMessage(error));
+    } finally {
+      accountRequestInFlight.current = false;
+      setIsProcessingAccount(false);
+    }
+  };
   const form = useForm<MyPageFormValues>({
     defaultValues: {
       marketingConsent: false,
@@ -177,9 +195,7 @@ export default function MyPageRoute() {
                   inputRef={ref}
                   label="성함"
                   onBlur={onBlur}
-                  onChangeText={(nextValue) =>
-                    onChange(formatName(nextValue))
-                  }
+                  onChangeText={(nextValue) => onChange(formatName(nextValue))}
                   onSubmitEditing={() => setFocus('phone')}
                   placeholder="성함을 입력해주세요."
                   textContentType="name"
@@ -235,13 +251,39 @@ export default function MyPageRoute() {
               label="정보 변경하기"
               onPress={submitForm}
             />
+            <View style={styles.accountActions}>
+              {(['logout', 'withdraw'] as const).map((action) => (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: isProcessingAccount }}
+                  disabled={isProcessingAccount}
+                  hitSlop={8}
+                  key={action}
+                  onPress={() => setAccountAction(action)}
+                >
+                  <Text style={styles.accountActionText}>
+                    {action === 'logout' ? '로그아웃' : '회원탈퇴'}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
         </View>
       </AppScreen>
 
-      <ProfileNoticeModal
-        notice={notice}
-        onConfirm={() => setNotice(null)}
+      <ProfileNoticeModal notice={notice} onConfirm={() => setNotice(null)} />
+      <NoticeModal
+        accessibilityLabel={isWithdrawal ? '회원탈퇴 확인' : '로그아웃 확인'}
+        busy={isProcessingAccount}
+        confirmLabel={isWithdrawal ? '회원탈퇴' : '로그아웃'}
+        message={
+          isWithdrawal
+            ? '적립된 마일리지를 포함한 데이터가 삭제되며 복구하실 수 없습니다. 회원탈퇴 하시겠습니까?'
+            : '로그아웃 하시겠습니까?'
+        }
+        onCancel={() => setAccountAction(null)}
+        onConfirm={() => void confirmAccountAction()}
+        visible={accountAction !== null}
       />
     </FormProvider>
   );
@@ -256,6 +298,15 @@ const styles = StyleSheet.create({
   form: {
     width: '100%',
     gap: 16,
+  },
+  accountActions: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+  },
+  accountActionText: {
+    ...typography.suitMedium14,
+    color: colors.gray400,
   },
   fieldGroup: {
     width: '100%',
