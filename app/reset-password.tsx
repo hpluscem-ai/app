@@ -7,7 +7,7 @@ import { AppScreen } from '../components/AppScreen';
 import { NoticeModal } from '../components/NoticeModal';
 import { FormTextField } from '../components/auth/FormTextField';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
-import { showResetPasswordServerPendingAlert } from '../utils/alerts';
+import { useAlerts } from '../utils/alerts';
 import {
   validatePassword,
   validatePasswordConfirmation,
@@ -23,15 +23,7 @@ type PasswordChangedModalProps = {
   visible: boolean;
 };
 
-async function requestPasswordReset(): Promise<boolean> {
-  showResetPasswordServerPendingAlert();
-  return false;
-}
-
-function PasswordChangedModal({
-  onLogin,
-  visible,
-}: PasswordChangedModalProps) {
+function PasswordChangedModal({ onLogin, visible }: PasswordChangedModalProps) {
   return (
     <NoticeModal
       accessibilityLabel="비밀번호 변경 완료"
@@ -47,6 +39,12 @@ function PasswordChangedModal({
 }
 
 export default function ResetPasswordRoute() {
+  const { showResetPasswordServerPendingAlert } = useAlerts();
+  async function requestPasswordReset(): Promise<boolean> {
+    showResetPasswordServerPendingAlert();
+    return false;
+  }
+
   const router = useRouter();
   const [isComplete, setIsComplete] = useState(false);
   const {
@@ -54,6 +52,7 @@ export default function ResetPasswordRoute() {
     formState: { errors, isSubmitting },
     handleSubmit,
     setFocus,
+    watch,
   } = useForm<ResetPasswordFormValues>({
     defaultValues: {
       password: '',
@@ -61,6 +60,7 @@ export default function ResetPasswordRoute() {
     },
     mode: 'onChange',
   });
+  const passwordConfirmation = watch('passwordConfirmation');
 
   const submitForm = handleSubmit(async () => {
     const changed = await requestPasswordReset();
@@ -101,7 +101,7 @@ export default function ResetPasswordRoute() {
                 />
               )}
               rules={{
-                deps: ['passwordConfirmation'],
+                deps: passwordConfirmation ? ['passwordConfirmation'] : undefined,
                 validate: validatePassword,
               }}
             />

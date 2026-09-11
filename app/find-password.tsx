@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Controller, FormProvider, useForm } from 'react-hook-form';
 import { StyleSheet, Text, View } from 'react-native';
@@ -8,12 +8,12 @@ import { FormTextField } from '../components/auth/FormTextField';
 import { PhoneVerificationSection } from '../components/auth/PhoneVerificationSection';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
 import { colors, typography } from '../constants/theme';
+import { usePhoneVerification } from '../hooks/usePhoneVerification';
+import { useAlerts } from '../utils/alerts';
 import {
-  showFindPasswordServerPendingAlert,
-  showKakaoVerificationCheckPendingAlert,
-  showKakaoVerificationRequestPendingAlert,
-  showPhoneVerificationRequiredAlert,
-} from '../utils/alerts';
+  getAuthErrorMessage,
+  requestPasswordResetEmail,
+} from '../utils/authApi';
 import { validateEmail } from '../utils/validation';
 
 type FindPasswordFormValues = {
@@ -23,14 +23,17 @@ type FindPasswordFormValues = {
   verificationProof: string;
 };
 
-async function requestPasswordResetLink(): Promise<boolean> {
-  showFindPasswordServerPendingAlert();
-  return false;
-}
-
 export default function FindPasswordRoute() {
+  const {
+    showAuthErrorAlert,
+    showPhoneVerificationRequiredAlert,
+  } = useAlerts();
   const router = useRouter();
-  const [submittedEmail, setSubmittedEmail] = useState<string | null>(null);
+  const submissionInFlight = useRef(false);
+  const [result, setResult] = useState<{
+    email: string;
+    message: string;
+  } | null>(null);
   const form = useForm<FindPasswordFormValues>({
     defaultValues: {
       email: '',
@@ -42,27 +45,44 @@ export default function FindPasswordRoute() {
   });
   const {
     control,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isValid },
     handleSubmit,
     setFocus,
+    setValue,
     watch,
   } = form;
   const [email, verificationProof] = watch(['email', 'verificationProof']);
+  const { requestCode, verifyCode, isProofValid, resetVerification, revision } =
+    usePhoneVerification('reset_password', email);
   const isEmailValid = validateEmail(email) === true;
-  const submitForm = handleSubmit(async ({ email: submittedValue }) => {
-    if (!verificationProof) {
+  const submitValidForm = handleSubmit(async (values) => {
+    if (!isProofValid(values)) {
+      setValue('verificationProof', '');
       showPhoneVerificationRequiredAlert();
       return;
     }
-
-    const sent = await requestPasswordResetLink();
-
-    if (sent) {
-      setSubmittedEmail(submittedValue);
+    try {
+      const accepted = await requestPasswordResetEmail(values);
+      setResult({ ...accepted, email: values.email.trim() });
+    } catch (error) {
+      showAuthErrorAlert(getAuthErrorMessage(error));
+    } finally {
+      // A new mail request needs fresh SMS verification, including after an uncertain response.
+      setValue('verificationProof', '');
+      resetVerification();
     }
   });
+  const submitForm = async () => {
+    if (submissionInFlight.current) return;
+    submissionInFlight.current = true;
+    try {
+      await submitValidForm();
+    } finally {
+      submissionInFlight.current = false;
+    }
+  };
 
-  if (submittedEmail) {
+  if (result) {
     return (
       <AppScreen
         contentStyle={styles.authContent}
@@ -73,10 +93,10 @@ export default function FindPasswordRoute() {
         <View style={styles.resultContent}>
           <View style={styles.resultSummary}>
             <Text style={styles.resultMessage}>
-              아래 이메일로 비밀번호 재설정 링크를 발송했습니다.
+              {result.message}
             </Text>
             <View style={styles.resultPill}>
-              <Text style={styles.resultValue}>{submittedEmail}</Text>
+              <Text style={styles.resultValue}>{result.email}</Text>
             </View>
           </View>
 
@@ -105,6 +125,7 @@ export default function FindPasswordRoute() {
               <FormTextField
                 accessibilityLabel="이메일"
                 autoComplete="email"
+                editable={!isSubmitting}
                 error={errors.email?.message}
                 inputRef={ref}
                 keyboardType="email-address"
@@ -123,16 +144,17 @@ export default function FindPasswordRoute() {
 
           <FormProvider {...form}>
             <PhoneVerificationSection
-              onRequestCode={showKakaoVerificationRequestPendingAlert}
-              onVerifyCode={showKakaoVerificationCheckPendingAlert}
+              disabled={isSubmitting}
+              onRequestCode={requestCode}
+              onVerifyCode={verifyCode}
               requestPrerequisiteMet={isEmailValid}
-              verificationScope={email}
+              verificationScope={`${email}:${revision}`}
             />
           </FormProvider>
         </View>
 
         <PrimaryButton
-          disabled={isSubmitting}
+          disabled={isSubmitting || !isValid || !verificationProof}
           label="비밀번호 찾기"
           onPress={submitForm}
         />

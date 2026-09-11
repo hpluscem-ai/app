@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { FormProvider, useForm } from 'react-hook-form';
@@ -7,12 +7,9 @@ import { AppScreen } from '../components/AppScreen';
 import { PhoneVerificationSection } from '../components/auth/PhoneVerificationSection';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
 import { colors, typography } from '../constants/theme';
-import {
-  showFindEmailServerPendingAlert,
-  showKakaoVerificationCheckPendingAlert,
-  showKakaoVerificationRequestPendingAlert,
-  showPhoneVerificationRequiredAlert,
-} from '../utils/alerts';
+import { usePhoneVerification } from '../hooks/usePhoneVerification';
+import { useAlerts } from '../utils/alerts';
+import { findEmail, getAuthErrorMessage } from '../utils/authApi';
 
 type FindEmailFormValues = {
   phone: string;
@@ -25,13 +22,15 @@ type FindEmailResult = {
   phoneLastFour: string;
 };
 
-async function requestFindEmailResult(): Promise<FindEmailResult | null> {
-  showFindEmailServerPendingAlert();
-  return null;
-}
-
 export default function FindEmailRoute() {
+  const {
+    showAuthErrorAlert,
+    showPhoneVerificationRequiredAlert,
+  } = useAlerts();
   const router = useRouter();
+  const submissionInFlight = useRef(false);
+  const { requestCode, verifyCode, isProofValid, resetVerification, revision } =
+    usePhoneVerification('find_email');
   const [result, setResult] = useState<FindEmailResult | null>(null);
   const form = useForm<FindEmailFormValues>({
     defaultValues: {
@@ -42,23 +41,37 @@ export default function FindEmailRoute() {
     mode: 'onChange',
   });
   const {
-    formState: { isSubmitting },
+    formState: { isSubmitting, isValid },
     handleSubmit,
+    setValue,
     watch,
   } = form;
   const verificationProof = watch('verificationProof');
-  const submitForm = handleSubmit(async () => {
-    if (!verificationProof) {
+  const submitValidForm = handleSubmit(async (values) => {
+    if (!isProofValid(values)) {
+      setValue('verificationProof', '');
       showPhoneVerificationRequiredAlert();
       return;
     }
-
-    const nextResult = await requestFindEmailResult();
-
-    if (nextResult) {
-      setResult(nextResult);
+    try {
+      setResult(await findEmail(values));
+    } catch (error) {
+      showAuthErrorAlert(getAuthErrorMessage(error));
+    } finally {
+      // A lookup consumes the proof even when no account matches.
+      setValue('verificationProof', '');
+      resetVerification();
     }
   });
+  const submitForm = async () => {
+    if (submissionInFlight.current) return;
+    submissionInFlight.current = true;
+    try {
+      await submitValidForm();
+    } finally {
+      submissionInFlight.current = false;
+    }
+  };
 
   if (result) {
     return (
@@ -109,13 +122,15 @@ export default function FindEmailRoute() {
       <View style={styles.form}>
         <FormProvider {...form}>
           <PhoneVerificationSection
-            onRequestCode={showKakaoVerificationRequestPendingAlert}
-            onVerifyCode={showKakaoVerificationCheckPendingAlert}
+            disabled={isSubmitting}
+            onRequestCode={requestCode}
+            onVerifyCode={verifyCode}
+            verificationScope={String(revision)}
           />
         </FormProvider>
 
         <PrimaryButton
-          disabled={isSubmitting}
+          disabled={isSubmitting || !isValid || !verificationProof}
           label="이메일 찾기"
           onPress={submitForm}
         />
