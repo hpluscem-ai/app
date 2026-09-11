@@ -1,5 +1,5 @@
 import type { ImagePickerAsset } from 'expo-image-picker';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, typography } from '../../constants/theme';
 import { CloseIcon } from '../icons/CloseIcon';
@@ -101,7 +101,11 @@ export function UploadCard({
   return (
     <View style={styles.cardShadow}>
       <Pressable
-        accessibilityHint="카메라 촬영 또는 갤러리 선택 메뉴를 엽니다."
+        accessibilityHint={
+          Platform.OS === 'web'
+            ? '파일 선택창을 엽니다.'
+            : '카메라 촬영 또는 갤러리 선택 메뉴를 엽니다.'
+        }
         accessibilityLabel={
           error ? `${label}. 필수 사진이 없습니다.` : label
         }

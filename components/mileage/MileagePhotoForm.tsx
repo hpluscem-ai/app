@@ -1,18 +1,9 @@
 import { useState } from 'react';
 import * as ImagePicker from 'expo-image-picker';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 
 import { colors, typography } from '../../constants/theme';
-import {
-  showCameraPermissionAlert,
-  showImagePickerErrorAlert,
-  showImageSizeLimitAlert,
-  showImageSizeUnavailableAlert,
-  showImageSourceActions,
-  showMileageAtLeastOneImageRequiredAlert,
-  showMileageImagesRequiredAlert,
-  showUnsupportedImageFormatAlert,
-} from '../../utils/alerts';
+import { useAlerts } from '../../utils/alerts';
 import { PrimaryButton } from '../auth/PrimaryButton';
 import { UploadCard, type UploadKind } from './UploadCard';
 
@@ -65,6 +56,17 @@ export function MileagePhotoForm({
   requirement,
   submitLabel,
 }: MileagePhotoFormProps) {
+  const {
+    showImageSourceActions,
+    showCameraPermissionAlert,
+    showImagePickerErrorAlert,
+    showImageSizeLimitAlert,
+    showImageSizeUnavailableAlert,
+    showMileageAtLeastOneImageRequiredAlert,
+    showMileageImagesRequiredAlert,
+    showUnsupportedImageFormatAlert,
+  } = useAlerts();
+
   const [receiptImage, setReceiptImage] =
     useState<ImagePicker.ImagePickerAsset | null>(null);
   const [dashboardImage, setDashboardImage] =
@@ -73,7 +75,7 @@ export function MileagePhotoForm({
 
   const pickImage = async (kind: UploadKind, source: ImageSource) => {
     try {
-      if (source === 'camera') {
+      if (source === 'camera' && Platform.OS !== 'web') {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
 
         if (!permission.granted) {

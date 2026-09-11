@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { SvgXml } from 'react-native-svg';
 
 import { svgMarkup } from '../../constants/assets';
@@ -14,7 +15,7 @@ export function MileageWaterJugIcon({
   return (
     <SvgXml
       accessibilityLabel={accessibilityLabel}
-      accessible
+      accessible={Platform.OS === 'web' ? undefined : true}
       height={98}
       width={64}
       xml={

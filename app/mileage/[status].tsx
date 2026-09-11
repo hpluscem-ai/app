@@ -5,17 +5,17 @@ import { AppScreen } from '../../components/AppScreen';
 import { MileagePhotoForm } from '../../components/mileage/MileagePhotoForm';
 import { UploadCard } from '../../components/mileage/UploadCard';
 import { colors, typography } from '../../constants/theme';
-import { showMileageReRegistrationServerPendingAlert } from '../../utils/alerts';
+import { useAlerts } from '../../utils/alerts';
 
 type MileageStatus = 'pending' | 'rejected';
 
-function isMileageStatus(
-  value: string | undefined,
-): value is MileageStatus {
+function isMileageStatus(value: string | undefined): value is MileageStatus {
   return value === 'pending' || value === 'rejected';
 }
 
 export default function MileageStatusRoute() {
+  const { showMileageReRegistrationServerPendingAlert } = useAlerts();
+
   const { status } = useLocalSearchParams<{ status?: string }>();
 
   if (!isMileageStatus(status)) {
@@ -52,7 +52,8 @@ function PendingMileagePhotos() {
     <View style={styles.pageContent}>
       <View style={styles.uploadSection}>
         <Text style={styles.description}>
-          제출한 사진은 서버 연동 후 확인할 수 있습니다. 심사 완료 전에는 사진을 수정할 수 없습니다.
+          제출한 사진은 서버 연동 후 확인할 수 있습니다. 심사 완료 전에는 사진을
+          수정할 수 없습니다.
         </Text>
         <View style={styles.uploadRow}>
           <UploadCard

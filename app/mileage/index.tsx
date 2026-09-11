@@ -19,8 +19,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppScreen } from '../../components/AppScreen';
+import { useAuth } from '../../components/AuthProvider';
 import { MileageWaterJugIcon } from '../../components/icons/MileageWaterJugIcon';
-import { colors, typography } from '../../constants/theme';
+import { colors, typography, webAppFrame } from '../../constants/theme';
 
 type MileageHistoryStatus = 'credited' | 'pending' | 'rejected' | 'settled';
 type MileageHistoryPeriod = 'oneMonth' | 'threeMonths' | 'custom';
@@ -55,33 +56,6 @@ const historyStatus = {
     label: '정산',
   },
 } as const;
-
-const mockMileageHistory = [
-  {
-    dateLabel: '2026. 08. 01',
-    id: 'mock-credited',
-    mileage: 40_000,
-    status: 'credited',
-  },
-  {
-    dateLabel: '2026. 07. 31',
-    id: 'mock-pending',
-    mileage: 20_000,
-    status: 'pending',
-  },
-  {
-    dateLabel: '2026. 07. 10',
-    id: 'mock-rejected',
-    mileage: 20_000,
-    status: 'rejected',
-  },
-  {
-    dateLabel: '2026. 06. 30',
-    id: 'mock-settled',
-    mileage: 40_000,
-    status: 'settled',
-  },
-] as const satisfies readonly MileageHistoryItem[];
 
 const historyPeriodOptions = [
   { label: '최근 1개월', value: 'oneMonth' },
@@ -128,10 +102,12 @@ function getInitialCustomRange() {
 
 export default function MileageRoute() {
   const router = useRouter();
+  const { state } = useAuth();
 
   return (
     <AppScreen activeTab="mileage" showFooter={false} variant="main">
       <MileageHero
+        userName={state.user?.name}
         onApply={() => {
           router.push('/mileage/apply');
         }}
@@ -139,7 +115,6 @@ export default function MileageRoute() {
       <View style={styles.content}>
         <MileageBalanceCard />
         <MileageHistory
-          items={mockMileageHistory}
           onOpenStatus={(status) => {
             router.push(
               status === 'pending'
@@ -205,15 +180,11 @@ function MileageHero({
 }
 
 function MileageBalanceCard({ balance }: { balance?: number }) {
-  const balanceLabel = balance === undefined ? '—' : balance.toLocaleString('ko-KR');
+  const balanceLabel = (balance ?? 0).toLocaleString('ko-KR');
 
   return (
     <View
-      accessibilityLabel={
-        balance === undefined
-          ? '누적 마일리지. 서버 연동 전이라 현재 잔액을 확인할 수 없습니다.'
-          : `누적 마일리지 ${balanceLabel}마일`
-      }
+      accessibilityLabel={`누적 마일리지 ${balanceLabel}마일`}
       accessible
       style={styles.balanceCard}
     >
@@ -439,6 +410,7 @@ function MileageFilterSheet({
           accessibilityViewIsModal
           style={[
             styles.filterSheet,
+            Platform.OS === 'web' && webAppFrame,
             { paddingBottom: Math.max(8, insets.bottom) },
             { transform: [{ translateY: sheetTranslateY }] },
           ]}

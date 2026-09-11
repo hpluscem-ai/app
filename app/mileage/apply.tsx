@@ -1,8 +1,10 @@
 import { AppScreen } from '../../components/AppScreen';
 import { MileagePhotoForm } from '../../components/mileage/MileagePhotoForm';
-import { showMileageServerPendingAlert } from '../../utils/alerts';
+import { useAlerts } from '../../utils/alerts';
 
 export default function MileageApplyRoute() {
+  const { showMileageServerPendingAlert } = useAlerts();
+
   return (
     <AppScreen activeTab="apply" showFooter={false} variant="main">
       <MileagePhotoForm
