@@ -37,7 +37,7 @@ export function validatePhoneNumber(value: string): true | string {
     return '연락처를 입력해주세요.';
   }
 
-  return PHONE_PATTERN.test(value) || '010-0000-0000 형식으로 입력해주세요.';
+  return PHONE_PATTERN.test(value) || '올바른 휴대폰 번호를 입력해주세요.';
 }
 
 export function validateVerificationCode(value: string): true | string {

@@ -20,16 +20,20 @@ type PhoneVerificationFormValues = {
   verificationProof: string;
 };
 
-type RequestCodeResult = { status: 'sent' } | { status: 'unavailable' };
+type UnavailableResult = { status: 'unavailable'; message?: string };
+type RequestCodeResult =
+  | { status: 'sent'; expiresAt: string }
+  | UnavailableResult;
 type VerificationResult =
   | { status: 'verified'; verificationProof: string }
-  | { status: 'unavailable' };
+  | UnavailableResult;
 type VerificationValues = Pick<
   PhoneVerificationFormValues,
   'phone' | 'verificationCode'
 >;
 
 type PhoneVerificationSectionProps = {
+  disabled?: boolean;
   required?: boolean;
   requestPrerequisiteMet?: boolean;
   verificationScope?: string;
@@ -42,6 +46,7 @@ type PhoneVerificationSectionProps = {
 };
 
 export function PhoneVerificationSection({
+  disabled = false,
   required = true,
   requestPrerequisiteMet = true,
   verificationScope = '',
@@ -54,6 +59,8 @@ export function PhoneVerificationSection({
   const [hasRequestedCode, setHasRequestedCode] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
   const [isVerifying, setIsVerifying] = useState(false);
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
   const {
     control,
     formState: { errors },
@@ -62,8 +69,39 @@ export function PhoneVerificationSection({
     setError,
     setFocus,
     setValue,
-    trigger,
   } = useFormContext<PhoneVerificationFormValues>();
+
+  useEffect(
+    () => () => {
+      inputRevisionRef.current += 1;
+    },
+    [],
+  );
+
+  useEffect(() => {
+    if (hasRequestedCode && !isRequesting) setFocus('verificationCode');
+  }, [hasRequestedCode, isRequesting, setFocus]);
+
+  useEffect(() => {
+    if (expiresAt === null) return;
+    const updateRemainingTime = () => {
+      const remaining = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+      setRemainingSeconds(remaining);
+      if (remaining === 0) {
+        inputRevisionRef.current += 1;
+        setHasRequestedCode(false);
+        setExpiresAt(null);
+        setValue('verificationProof', '', { shouldDirty: true });
+        setError('verificationCode', {
+          type: 'validate',
+          message: '인증 시간이 만료되었습니다. 인증번호를 다시 발송해주세요.',
+        });
+      }
+    };
+    updateRemainingTime();
+    const interval = setInterval(updateRemainingTime, 1000);
+    return () => clearInterval(interval);
+  }, [expiresAt, setError, setValue]);
 
   useEffect(() => {
     if (previousVerificationScopeRef.current === verificationScope) {
@@ -73,6 +111,7 @@ export function PhoneVerificationSection({
     previousVerificationScopeRef.current = verificationScope;
     inputRevisionRef.current += 1;
     setHasRequestedCode(false);
+    setExpiresAt(null);
     setValue('verificationCode', '', {
       shouldDirty: true,
     });
@@ -81,7 +120,7 @@ export function PhoneVerificationSection({
   }, [clearErrors, setValue, verificationScope]);
 
   const requestCode = async () => {
-    if (actionInFlightRef.current) {
+    if (disabled || actionInFlightRef.current) {
       return;
     }
 
@@ -100,10 +139,11 @@ export function PhoneVerificationSection({
       return;
     }
 
-    await trigger('phone');
     actionInFlightRef.current = true;
     const requestRevision = ++inputRevisionRef.current;
     setIsRequesting(true);
+    setHasRequestedCode(false);
+    setExpiresAt(null);
     setValue('verificationCode', '', {
       shouldDirty: true,
     });
@@ -117,9 +157,20 @@ export function PhoneVerificationSection({
         getValues('phone') === phone;
 
       if (result.status === 'sent' && inputsAreUnchanged) {
+        const deadline = Date.parse(result.expiresAt);
+        if (!Number.isFinite(deadline) || deadline <= Date.now()) {
+          throw new Error('Invalid verification deadline');
+        }
+        setExpiresAt(deadline);
+        setRemainingSeconds(Math.ceil((deadline - Date.now()) / 1000));
         setHasRequestedCode(true);
         clearErrors('phone');
-        setFocus('verificationCode');
+      } else if (
+        result.status === 'unavailable' &&
+        result.message &&
+        inputsAreUnchanged
+      ) {
+        setError('phone', { type: 'server', message: result.message });
       }
     } catch {
       if (
@@ -141,10 +192,17 @@ export function PhoneVerificationSection({
     const phone = getValues('phone');
     const canVerifyCode =
       hasRequestedCode &&
+      expiresAt !== null &&
+      expiresAt > Date.now() &&
       validatePhoneNumber(phone) === true &&
       validateVerificationCode(verificationCode) === true;
 
-    if (!canVerifyCode || actionInFlightRef.current) {
+    if (
+      disabled ||
+      !canVerifyCode ||
+      actionInFlightRef.current ||
+      getValues('verificationProof')
+    ) {
       return;
     }
 
@@ -177,6 +235,15 @@ export function PhoneVerificationSection({
           message: '인증번호 확인에 실패했습니다. 다시 시도해주세요.',
           type: 'server',
         });
+      } else if (
+        result.status === 'unavailable' &&
+        result.message &&
+        inputsAreUnchanged
+      ) {
+        setError('verificationCode', {
+          type: 'server',
+          message: result.message,
+        });
       }
     } catch {
       if (
@@ -205,6 +272,7 @@ export function PhoneVerificationSection({
             <FormTextField
               accessibilityLabel="연락처"
               autoComplete="tel"
+              editable={!disabled && !isRequesting && !isVerifying}
               containerStyle={styles.phoneField}
               error={errors.phone?.message}
               inputRef={ref}
@@ -214,6 +282,7 @@ export function PhoneVerificationSection({
               onChangeText={(nextValue) => {
                 inputRevisionRef.current += 1;
                 setHasRequestedCode(false);
+                setExpiresAt(null);
                 setValue('verificationCode', '', { shouldDirty: true });
                 setValue('verificationProof', '', { shouldDirty: true });
                 clearErrors('verificationCode');
@@ -235,7 +304,7 @@ export function PhoneVerificationSection({
           }}
         />
         <PrimaryButton
-          disabled={isRequesting || isVerifying}
+          disabled={disabled || isRequesting || isVerifying}
           label={hasRequestedCode ? '재발송' : '인증번호 발송'}
           onPress={() => void requestCode()}
           width={107}
@@ -249,6 +318,7 @@ export function PhoneVerificationSection({
           <FormTextField
             accessibilityLabel="인증번호"
             autoComplete="one-time-code"
+            editable={!disabled && !isRequesting && !isVerifying}
             error={errors.verificationCode?.message}
             inputRef={ref}
             keyboardType="number-pad"
@@ -282,6 +352,12 @@ export function PhoneVerificationSection({
               : validateVerificationCode(value),
         }}
       />
+      {expiresAt !== null ? (
+        <Text style={styles.timer}>
+          남은 시간 {String(Math.floor(remainingSeconds / 60)).padStart(2, '0')}
+          :{String(remainingSeconds % 60).padStart(2, '0')}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -304,5 +380,9 @@ const styles = StyleSheet.create({
   },
   phoneField: {
     flex: 1,
+  },
+  timer: {
+    ...typography.authCaption,
+    color: colors.gray600,
   },
 });
