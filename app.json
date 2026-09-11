@@ -47,7 +47,8 @@
         {
           "url": "https://sentry.io/"
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "extra": {
       "router": {},
