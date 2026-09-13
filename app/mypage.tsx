@@ -1,4 +1,5 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import { Controller, FormProvider, useForm } from 'react-hook-form';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -10,8 +11,16 @@ import { PhoneVerificationSection } from '../components/auth/PhoneVerificationSe
 import { PrimaryButton } from '../components/auth/PrimaryButton';
 import { CheckSquareIcon } from '../components/icons/CheckSquareIcon';
 import { colors, typography } from '../constants/theme';
+import { usePhoneVerification } from '../hooks/usePhoneVerification';
 import { useAlerts } from '../utils/alerts';
-import { getAuthErrorMessage } from '../utils/authApi';
+import {
+  changePhone,
+  getAuthErrorMessage,
+  getProfile,
+  requestMyPasswordResetEmail,
+  updateProfile,
+  type DriverProfile,
+} from '../utils/authApi';
 import { formatName } from '../utils/inputFormat';
 
 type MyPageFormValues = {
@@ -54,46 +63,42 @@ function ProfileNoticeModal({ notice, onConfirm }: ProfileNoticeModalProps) {
 }
 
 export default function MyPageRoute() {
-  const { signOut, withdraw } = useAuth();
+  const { request, signOut, updateName, withdraw } = useAuth();
   const {
     showAuthErrorAlert,
-    showKakaoVerificationCheckPendingAlert,
-    showKakaoVerificationRequestPendingAlert,
     showPhoneVerificationRequiredAlert,
-    showProfilePasswordResetServerPendingAlert,
-    showProfileServerPendingAlert,
   } = useAlerts();
-  async function requestProfilePasswordResetLink(): Promise<string | null> {
-    showProfilePasswordResetServerPendingAlert();
-    return null;
-  }
-
-  async function requestProfileUpdate(
-    _values: MyPageFormValues,
-  ): Promise<boolean> {
-    showProfileServerPendingAlert();
-    return false;
-  }
-
+  const [profile, setProfile] = useState<DriverProfile | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSendingResetLink, setIsSendingResetLink] = useState(false);
   const [notice, setNotice] = useState<ProfileNotice | null>(null);
   const [accountAction, setAccountAction] = useState<'logout' | 'withdraw' | null>(null);
   const [isProcessingAccount, setIsProcessingAccount] = useState(false);
   const accountRequestInFlight = useRef(false);
+  const formRequestInFlight = useRef(false);
+  const activeFocus = useRef<object | null>(null);
   const isWithdrawal = accountAction === 'withdraw';
   const confirmAccountAction = async () => {
-    if (!accountAction || accountRequestInFlight.current) return;
+    const focus = activeFocus.current;
+    if (!focus || !accountAction || accountRequestInFlight.current || formRequestInFlight.current) return;
     accountRequestInFlight.current = true;
     setIsProcessingAccount(true);
     try {
       await (isWithdrawal ? withdraw() : signOut());
+      if (activeFocus.current !== focus) return;
       setAccountAction(null);
     } catch (error) {
-      setAccountAction(null);
-      showAuthErrorAlert(getAuthErrorMessage(error));
+      if (activeFocus.current === focus) {
+        setAccountAction(null);
+        showAuthErrorAlert(getAuthErrorMessage(error));
+      }
     } finally {
-      accountRequestInFlight.current = false;
-      setIsProcessingAccount(false);
+      if (activeFocus.current === focus) {
+        accountRequestInFlight.current = false;
+        setIsProcessingAccount(false);
+      }
     }
   };
   const form = useForm<MyPageFormValues>({
@@ -109,45 +114,125 @@ export default function MyPageRoute() {
   });
   const {
     control,
-    formState: { errors, isSubmitting },
+    formState: { errors },
     handleSubmit,
+    getValues,
+    reset,
     setFocus,
+    setValue,
     watch,
   } = form;
-  const [phone, verificationCode, verificationProof] = watch([
-    'phone',
-    'verificationCode',
-    'verificationProof',
-  ]);
+  const [name, phone, marketingConsent] = watch(['name', 'phone', 'marketingConsent']);
+  const phoneChanged = Boolean(profile && phone !== profile.phone);
+  const hasChanges = Boolean(profile && (
+    name.trim() !== profile.name || marketingConsent !== profile.marketingConsent || phoneChanged
+  ));
+  const purpose = phoneChanged ? 'change_phone' : 'reset_password';
+  const { requestCode, verifyCode, isProofValid, resetVerification, revision } =
+    usePhoneVerification(purpose, profile?.email ?? '');
+  const busy = isSavingProfile || isSendingResetLink || isProcessingAccount;
+  const formDisabled = !profile || busy;
+
+  useFocusEffect(useCallback(() => {
+    const focus = {};
+    activeFocus.current = focus;
+    formRequestInFlight.current = false;
+    accountRequestInFlight.current = false;
+    setIsSavingProfile(false);
+    setIsSendingResetLink(false);
+    setIsProcessingAccount(false);
+    setNotice(null);
+    setAccountAction(null);
+    setProfile(null);
+    setLoadError(null);
+    void request(getProfile).then((loaded) => {
+      if (activeFocus.current !== focus) return;
+      setProfile(loaded);
+      reset({ ...loaded, verificationCode: '', verificationProof: '' });
+      updateName(loaded.name);
+    }).catch((error: unknown) => {
+      if (activeFocus.current === focus) setLoadError(getAuthErrorMessage(error));
+    });
+    return () => { activeFocus.current = null; };
+  }, [loadAttempt, request, reset, updateName]));
+
   const requestPasswordResetLink = async () => {
-    if (isSendingResetLink) {
-      return;
-    }
-
-    setIsSendingResetLink(true);
-
-    try {
-      const email = await requestProfilePasswordResetLink();
-
-      if (email?.trim()) {
-        setNotice({ email, type: 'password-reset-sent' });
-      }
-    } finally {
-      setIsSendingResetLink(false);
-    }
-  };
-  const submitForm = handleSubmit(async (values) => {
-    if ((phone || verificationCode) && !verificationProof) {
+    const focus = activeFocus.current;
+    if (!focus || !profile || formRequestInFlight.current || accountRequestInFlight.current) return;
+    const values = getValues();
+    if (values.phone !== profile.phone || !isProofValid(values)) {
+      setValue('verificationProof', '');
       showPhoneVerificationRequiredAlert();
       return;
     }
-
-    const updated = await requestProfileUpdate(values);
-
-    if (updated) {
-      setNotice({ type: 'profile-updated' });
+    formRequestInFlight.current = true;
+    setIsSendingResetLink(true);
+    try {
+      const { email } = await request((session) => requestMyPasswordResetEmail(values, session));
+      if (activeFocus.current !== focus) return;
+      setNotice({ email, type: 'password-reset-sent' });
+    } catch (error) {
+      if (activeFocus.current === focus) showAuthErrorAlert(getAuthErrorMessage(error));
+    } finally {
+      if (activeFocus.current === focus) {
+        setValue('verificationProof', '');
+        resetVerification();
+        formRequestInFlight.current = false;
+        setIsSendingResetLink(false);
+      }
     }
-  });
+  };
+  const submitValidForm = (focus: object) => handleSubmit(async (values) => {
+    if (activeFocus.current !== focus || !profile) return;
+    const changingPhone = values.phone !== profile.phone;
+    if (changingPhone && !isProofValid(values)) {
+      setValue('verificationProof', '');
+      showPhoneVerificationRequiredAlert();
+      return;
+    }
+    try {
+      const changes = {
+        ...(values.name.trim() === profile.name ? {} : { name: values.name }),
+        ...(values.marketingConsent === profile.marketingConsent ? {} : { marketingConsent: values.marketingConsent }),
+      };
+      const updated = Object.keys(changes).length
+        ? await request((session) => updateProfile(changes, session))
+        : profile;
+      if (activeFocus.current !== focus) return;
+      setProfile(updated);
+      updateName(updated.name);
+      if (changingPhone) {
+        await request((session) => changePhone(values, session));
+        if (activeFocus.current !== focus) return;
+      }
+      const saved = changingPhone ? { ...updated, phone: values.phone } : updated;
+      setProfile(saved);
+      reset({ ...saved, verificationCode: '', verificationProof: '' });
+      if (!changingPhone) resetVerification();
+      setNotice({ type: 'profile-updated' });
+    } catch (error) {
+      if (activeFocus.current === focus) showAuthErrorAlert(getAuthErrorMessage(error));
+    } finally {
+      if (activeFocus.current === focus && changingPhone) {
+        setValue('verificationProof', '');
+        resetVerification();
+      }
+    }
+  })();
+  const submitForm = async () => {
+    const focus = activeFocus.current;
+    if (!focus || formRequestInFlight.current || accountRequestInFlight.current || !profile || !hasChanges) return;
+    formRequestInFlight.current = true;
+    setIsSavingProfile(true);
+    try {
+      await submitValidForm(focus);
+    } finally {
+      if (activeFocus.current === focus) {
+        formRequestInFlight.current = false;
+        setIsSavingProfile(false);
+      }
+    }
+  };
 
   return (
     <FormProvider {...form}>
@@ -162,21 +247,21 @@ export default function MyPageRoute() {
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>이메일</Text>
               <View
-                accessibilityLabel="이메일 정보, 조회 후 표시"
+                accessibilityLabel={profile ? `이메일 ${profile.email}` : '이메일 정보, 조회 후 표시'}
                 style={styles.readonlyField}
               >
                 <Text style={styles.readonlyPlaceholder}>
-                  정보 조회 후 표시됩니다.
+                  {profile?.email ?? '정보 조회 후 표시됩니다.'}
                 </Text>
               </View>
               <Pressable
                 accessibilityRole="button"
-                accessibilityState={{ disabled: isSendingResetLink }}
-                disabled={isSendingResetLink}
+                accessibilityState={{ disabled: formDisabled }}
+                disabled={formDisabled}
                 onPress={() => void requestPasswordResetLink()}
                 style={({ pressed }) => [
                   styles.passwordResetButton,
-                  isSendingResetLink && styles.disabled,
+                  formDisabled && styles.disabled,
                   pressed && styles.pressed,
                 ]}
               >
@@ -191,6 +276,7 @@ export default function MyPageRoute() {
                 <FormTextField
                   accessibilityLabel="성함"
                   autoCapitalize="words"
+                  editable={!formDisabled}
                   error={errors.name?.message}
                   inputRef={ref}
                   label="성함"
@@ -209,10 +295,11 @@ export default function MyPageRoute() {
             />
 
             <PhoneVerificationSection
-              onRequestCode={showKakaoVerificationRequestPendingAlert}
-              onVerifyCode={showKakaoVerificationCheckPendingAlert}
-              required={false}
-              verificationScope="profile-phone-change"
+              disabled={formDisabled}
+              onRequestCode={requestCode}
+              onVerifyCode={verifyCode}
+              required={phoneChanged}
+              verificationScope={`${profile?.email ?? ''}:${purpose}:${revision}`}
             />
 
             <View style={styles.fieldGroup}>
@@ -226,7 +313,8 @@ export default function MyPageRoute() {
                       <Pressable
                         accessibilityLabel="마케팅 수신에 동의합니다."
                         accessibilityRole="checkbox"
-                        accessibilityState={{ checked: value }}
+                        accessibilityState={{ checked: value, disabled: formDisabled }}
+                        disabled={formDisabled}
                         hitSlop={8}
                         onPress={() => onChange(!value)}
                         style={({ pressed }) => [
@@ -247,7 +335,7 @@ export default function MyPageRoute() {
             </View>
 
             <PrimaryButton
-              disabled={isSubmitting}
+              disabled={formDisabled || !hasChanges}
               label="정보 변경하기"
               onPress={submitForm}
             />
@@ -255,8 +343,8 @@ export default function MyPageRoute() {
               {(['logout', 'withdraw'] as const).map((action) => (
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityState={{ disabled: isProcessingAccount }}
-                  disabled={isProcessingAccount}
+                  accessibilityState={{ disabled: busy }}
+                  disabled={busy}
                   hitSlop={8}
                   key={action}
                   onPress={() => setAccountAction(action)}
@@ -272,6 +360,13 @@ export default function MyPageRoute() {
       </AppScreen>
 
       <ProfileNoticeModal notice={notice} onConfirm={() => setNotice(null)} />
+      <NoticeModal
+        accessibilityLabel="내 정보 조회 실패"
+        confirmLabel="다시 시도"
+        message={loadError ?? ''}
+        onConfirm={() => setLoadAttempt((attempt) => attempt + 1)}
+        visible={loadError !== null}
+      />
       <NoticeModal
         accessibilityLabel={isWithdrawal ? '회원탈퇴 확인' : '로그아웃 확인'}
         busy={isProcessingAccount}

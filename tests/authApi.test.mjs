@@ -2,20 +2,26 @@ import assert from 'node:assert/strict';
 import { afterEach, test } from 'node:test';
 import {
   AuthApiError,
+  changePhone,
+  confirmPhoneChangeVerification,
   confirmPhoneVerification,
   findEmail,
   getApiUrl,
   getCurrentUser,
   getCurrentUserWithCookie,
+  getProfile,
   getSignupCompanies,
   login,
   loginWithCookie,
   logout,
   requestPasswordResetEmail,
+  requestMyPasswordResetEmail,
   resetPassword,
   sendPhoneVerification,
+  sendPhoneChangeVerification,
   signup,
   withdraw,
+  updateProfile,
 } from '../utils/authApi.ts';
 
 const originalFetch = globalThis.fetch;
@@ -31,6 +37,44 @@ afterEach(() => {
   else process.env.EXPO_PUBLIC_WEB_API_URL = originalWebUrl;
   if (originalPlatform === undefined) delete process.env.EXPO_OS;
   else process.env.EXPO_OS = originalPlatform;
+});
+
+test('profile and phone changes use authenticated contracts without leaking form fields', async () => {
+  process.env.EXPO_PUBLIC_API_URL = 'http://localhost:8080';
+  const profile = { email: 'driver@example.test', name: '기사', phone: '010-1234-5678', marketingConsent: false };
+  for (const session of [{ token: 'native-token' }, { credentials: 'include' }]) {
+    const requests = [];
+    globalThis.fetch = async (url, options) => {
+      assert.equal(options.credentials, session.credentials ?? 'omit');
+      assert.equal(options.headers.Authorization, session.token ? `Bearer ${session.token}` : undefined);
+      requests.push({ path: new URL(url).pathname, method: options.method, body: options.body && JSON.parse(options.body) });
+      if (url.endsWith('/users/me')) return Response.json(profile);
+      if (url.endsWith('/verifications')) return Response.json({ verificationId: 'id/with space', expiresAt }, { status: 201 });
+      if (url.endsWith('/confirm')) return Response.json({ verificationProof: 'proof', expiresAt });
+      if (url.endsWith('/password-reset-emails')) return Response.json({ email: profile.email });
+      return new Response(null, { status: 204 });
+    };
+    assert.deepEqual(await getProfile(session), profile);
+    assert.deepEqual(await updateProfile({ ...profile, name: ' 기사 ', verificationCode: '012345' }, session), profile);
+    const sent = await sendPhoneChangeVerification(profile.phone, session);
+    const verified = await confirmPhoneChangeVerification(sent.verificationId, '012345', session);
+    const input = { ...profile, verificationProof: verified.verificationProof, verificationCode: '012345' };
+    await changePhone(input, session);
+    assert.deepEqual(await requestMyPasswordResetEmail(input, session), { email: profile.email });
+    assert.deepEqual(requests, [
+      { path: '/api/v1/users/me', method: 'GET', body: undefined },
+      { path: '/api/v1/users/me', method: 'PATCH', body: { name: '기사', marketingConsent: false } },
+      { path: '/api/v1/auth/phone-change/verifications', method: 'POST', body: { phone: profile.phone } },
+      { path: '/api/v1/auth/phone-change/verifications/id%2Fwith%20space/confirm', method: 'POST', body: { code: '012345' } },
+      { path: '/api/v1/auth/change-phone', method: 'POST', body: { phone: profile.phone, verificationProof: 'proof' } },
+      { path: '/api/v1/auth/me/password-reset-emails', method: 'POST', body: { phone: profile.phone, verificationProof: 'proof' } },
+    ]);
+  }
+  globalThis.fetch = async () => Response.json({ ...profile, marketingConsent: 'false' });
+  await assert.rejects(getProfile({ token: 'token' }), { code: 'INVALID_RESPONSE' });
+  globalThis.fetch = async () => Response.json({ success: true });
+  await assert.rejects(changePhone({ phone: profile.phone, verificationProof: 'proof' }, {}), { code: 'INVALID_RESPONSE' });
+  await assert.rejects(requestMyPasswordResetEmail({ phone: profile.phone, verificationProof: 'proof' }, {}), { code: 'INVALID_RESPONSE' });
 });
 
 test('web can use a same-site API origin without changing the native server', () => {

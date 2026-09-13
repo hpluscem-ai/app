@@ -40,6 +40,41 @@ function sessionModule(platform = 'native') {
   return { ...exports, storage, secureStore };
 }
 
+test('authenticated profile requests select platform credentials and preserve retryable sessions', async () => {
+  const profile = { email: 'driver@example.test', name: '기사', phone: '010-1234-5678', marketingConsent: false };
+  for (const platform of ['native', 'web']) {
+    const session = sessionModule(platform);
+    globalThis.fetch = async (_url, options) => {
+      assert.equal(options.headers.Authorization, platform === 'native' ? 'Bearer test-native-session' : undefined);
+      assert.equal(options.credentials, platform === 'web' ? 'include' : 'omit');
+      return Response.json(profile);
+    };
+    assert.deepEqual(await session.requestWithSession(api.getProfile), profile);
+    for (const [status, code] of [[500, 'INTERNAL_SERVER_ERROR'], [403, 'WEB_ORIGIN_NOT_ALLOWED'], [401, 'INVALID_SESSION']]) {
+      globalThis.fetch = async () => Response.json({ code, message: '서버 안내' }, { status });
+      await assert.rejects(session.requestWithSession(api.getProfile), { code });
+      assert.equal(session.storage.has(key), platform === 'web' || status !== 401);
+    }
+  }
+  const session = sessionModule();
+  session.storage.set(key, JSON.stringify({ server: 'https://other.example', token: 'private' }));
+  globalThis.fetch = async () => assert.fail('must not send credentials to another server');
+  await assert.rejects(session.requestWithSession(api.getProfile), { code: 'INVALID_SESSION' });
+});
+
+test('an expired in-flight request does not remove a newer native session', async () => {
+  const session = sessionModule();
+  let finish;
+  globalThis.fetch = () => new Promise((resolve) => { finish = resolve; });
+  const pending = assert.rejects(session.requestWithSession(api.getProfile), { code: 'INVALID_SESSION' });
+  await new Promise((resolve) => setImmediate(resolve));
+  const next = JSON.stringify({ server, token: 'new-session' });
+  session.storage.set(key, next);
+  finish(Response.json({ code: 'INVALID_SESSION', message: '만료' }, { status: 401 }));
+  await pending;
+  assert.equal(session.storage.get(key), next);
+});
+
 test('native logout and withdrawal clear storage only after the server confirms completion', async () => {
   for (const action of ['signOutSession', 'withdrawSession']) {
     const session = sessionModule();

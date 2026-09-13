@@ -6,6 +6,7 @@ import {
   withdraw,
   type CurrentUser,
   type LoginInput,
+  type SessionOptions,
 } from './authApi';
 
 export async function restoreSession(): Promise<CurrentUser | null> {
@@ -26,6 +27,12 @@ export async function restoreSession(): Promise<CurrentUser | null> {
 export async function signInSession(input: LoginInput): Promise<CurrentUser> {
   await loginWithCookie(input);
   return getCurrentUserWithCookie();
+}
+
+export function requestWithSession<T>(
+  action: (session: SessionOptions) => Promise<T>,
+): Promise<T> {
+  return action({ credentials: 'include' });
 }
 
 export const signOutSession = () => logout(undefined, 'include');

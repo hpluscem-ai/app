@@ -9,6 +9,7 @@ import {
   withdraw,
   type CurrentUser,
   type LoginInput,
+  type SessionOptions,
 } from './authApi';
 
 const SESSION_KEY = 'hpluseco.auth.session';
@@ -73,6 +74,40 @@ export async function signInSession(input: LoginInput): Promise<CurrentUser> {
     );
   }
   return user;
+}
+
+export async function requestWithSession<T>(
+  action: (session: SessionOptions) => Promise<T>,
+): Promise<T> {
+  const token = await readSessionToken();
+  if (!token) {
+    throw new AuthApiError(
+      '로그인이 만료되었거나 유효하지 않습니다. 다시 로그인해주세요.',
+      'INVALID_SESSION',
+      401,
+    );
+  }
+  try {
+    return await action({ token });
+  } catch (error) {
+    if (
+      error instanceof AuthApiError &&
+      error.status === 401 &&
+      error.code === 'INVALID_SESSION'
+    ) {
+      try {
+        if (await readSessionToken() === token) {
+          await SecureStore.deleteItemAsync(SESSION_KEY);
+        }
+      } catch {
+        throw new AuthApiError(
+          '기기에 저장된 로그인 정보를 지우지 못했습니다. 다시 로그인해주세요.',
+          'SESSION_CLEAR_FAILED',
+        );
+      }
+    }
+    throw error;
+  }
 }
 
 async function endSession(action: (token: string) => Promise<void>): Promise<void> {

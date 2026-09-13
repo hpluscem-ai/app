@@ -1,20 +1,25 @@
 import { useRef, useState } from 'react';
 
+import { useAuth } from '../components/AuthProvider';
 import {
+  confirmPhoneChangeVerification,
   confirmPhoneVerification,
   getAuthErrorMessage,
   sendPhoneVerification,
+  sendPhoneChangeVerification,
   type PhoneVerificationInput,
 } from '../utils/authApi';
 
 export function usePhoneVerification(
-  purpose: PhoneVerificationInput['purpose'],
+  purpose: PhoneVerificationInput['purpose'] | 'change_phone',
   email = '',
 ) {
+  const { request } = useAuth();
   const [revision, setRevision] = useState(0);
   const sent = useRef<{
     phone: string;
     email: string;
+    purpose: typeof purpose;
     verificationId: string;
     expiresAt: string;
     verificationProof?: string;
@@ -28,12 +33,14 @@ export function usePhoneVerification(
   const requestCode = async (phone: string) => {
     sent.current = null;
     try {
-      const result = await sendPhoneVerification(
-        purpose === 'reset_password'
-          ? { purpose, phone, email }
-          : { purpose, phone },
-      );
-      sent.current = { ...result, phone, email };
+      const result = purpose === 'change_phone'
+        ? await request((session) => sendPhoneChangeVerification(phone, session))
+        : await sendPhoneVerification(
+          purpose === 'reset_password'
+            ? { purpose, phone, email }
+            : { purpose, phone },
+        );
+      sent.current = { ...result, phone, email, purpose };
       return { status: 'sent', expiresAt: result.expiresAt } as const;
     } catch (error) {
       return {
@@ -50,12 +57,13 @@ export function usePhoneVerification(
     phone: string;
     verificationCode: string;
   }) => {
-    const request = sent.current;
+    const verification = sent.current;
     if (
-      !request ||
-      request.phone !== phone ||
-      request.email !== email ||
-      Date.parse(request.expiresAt) <= Date.now()
+      !verification ||
+      verification.phone !== phone ||
+      verification.email !== email ||
+      verification.purpose !== purpose ||
+      Date.parse(verification.expiresAt) <= Date.now()
     ) {
       return {
         status: 'unavailable',
@@ -63,13 +71,15 @@ export function usePhoneVerification(
       } as const;
     }
     try {
-      const result = await confirmPhoneVerification(
-        request.verificationId,
-        verificationCode,
-        purpose,
-      );
+      const result = purpose === 'change_phone'
+        ? await request((session) => confirmPhoneChangeVerification(
+          verification.verificationId, verificationCode, session,
+        ))
+        : await confirmPhoneVerification(
+          verification.verificationId, verificationCode, purpose,
+        );
       if (
-        sent.current !== request ||
+        sent.current !== verification ||
         Date.parse(result.expiresAt) <= Date.now()
       ) {
         return {
@@ -77,7 +87,7 @@ export function usePhoneVerification(
           message: '인증번호를 다시 발송해주세요.',
         } as const;
       }
-      sent.current = { ...request, ...result };
+      sent.current = { ...verification, ...result };
       return {
         status: 'verified',
         verificationProof: result.verificationProof,
@@ -96,6 +106,7 @@ export function usePhoneVerification(
       sent.current &&
       sent.current.phone === values.phone &&
       sent.current.email === email &&
+      sent.current.purpose === purpose &&
       sent.current.verificationProof === values.verificationProof &&
       Date.parse(sent.current.expiresAt) > Date.now(),
     );

@@ -8,6 +8,18 @@ export type CurrentUser = {
 };
 export type SignupCompany = { id: string; businessName: string };
 
+export type SessionOptions = {
+  token?: string;
+  credentials?: RequestCredentials;
+};
+
+export type DriverProfile = {
+  email: string;
+  name: string;
+  phone: string;
+  marketingConsent: boolean;
+};
+
 export type SignupInput = LoginInput & {
   logisticsCompanyId: string;
   name: string;
@@ -103,7 +115,7 @@ async function request(
     token?: string;
     credentials?: RequestCredentials;
     expectedStatus?: number;
-    method?: 'GET' | 'POST' | 'DELETE';
+    method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   } = {},
 ): Promise<unknown> {
   const {
@@ -216,6 +228,88 @@ export async function withdraw(
     credentials,
     expectedStatus: 204,
   });
+}
+
+function driverProfile(data: unknown): DriverProfile {
+  if (!isRecord(data) || typeof data.marketingConsent !== 'boolean') {
+    return invalidResponse();
+  }
+  return {
+    email: stringField(data, 'email'),
+    name: stringField(data, 'name'),
+    phone: stringField(data, 'phone'),
+    marketingConsent: data.marketingConsent,
+  };
+}
+
+export async function getProfile(session: SessionOptions): Promise<DriverProfile> {
+  return driverProfile(await request('/users/me', session));
+}
+
+export async function updateProfile(
+  input: Partial<Pick<DriverProfile, 'name' | 'marketingConsent'>>,
+  session: SessionOptions,
+): Promise<DriverProfile> {
+  return driverProfile(await request('/users/me', {
+    ...session,
+    method: 'PATCH',
+    body: {
+      ...(input.name === undefined ? {} : { name: input.name.trim() }),
+      ...(input.marketingConsent === undefined ? {} : { marketingConsent: input.marketingConsent }),
+    },
+  }));
+}
+
+export async function sendPhoneChangeVerification(
+  phone: string,
+  session: SessionOptions,
+) {
+  const data = await request('/auth/phone-change/verifications', {
+    ...session,
+    body: { phone },
+  });
+  return {
+    verificationId: stringField(data, 'verificationId'),
+    expiresAt: expiration(data),
+  };
+}
+
+export async function confirmPhoneChangeVerification(
+  verificationId: string,
+  code: string,
+  session: SessionOptions,
+) {
+  const data = await request(
+    `/auth/phone-change/verifications/${encodeURIComponent(verificationId)}/confirm`,
+    { ...session, body: { code } },
+  );
+  return {
+    verificationProof: stringField(data, 'verificationProof'),
+    expiresAt: expiration(data),
+  };
+}
+
+export async function changePhone(
+  input: { phone: string; verificationProof: string },
+  session: SessionOptions,
+): Promise<void> {
+  await request('/auth/change-phone', {
+    ...session,
+    body: { phone: input.phone, verificationProof: input.verificationProof },
+    expectedStatus: 204,
+  });
+}
+
+export async function requestMyPasswordResetEmail(
+  input: { phone: string; verificationProof: string },
+  session: SessionOptions,
+) {
+  const data = await request('/auth/me/password-reset-emails', {
+    ...session,
+    body: { phone: input.phone, verificationProof: input.verificationProof },
+    expectedStatus: 200,
+  });
+  return { email: stringField(data, 'email') };
 }
 
 export async function getSignupCompanies(): Promise<SignupCompany[]> {
