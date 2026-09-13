@@ -1,13 +1,19 @@
-import { useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
 import { StyleSheet, View } from 'react-native';
 
 import { AppScreen } from '../components/AppScreen';
+import { useAuth } from '../components/AuthProvider';
 import { NoticeModal } from '../components/NoticeModal';
 import { FormTextField } from '../components/auth/FormTextField';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
-import { useAlerts } from '../utils/alerts';
+import {
+  AuthApiError,
+  getAuthErrorMessage,
+  resetPassword,
+  validatePasswordReset,
+} from '../utils/authApi';
 import {
   validatePassword,
   validatePasswordConfirmation,
@@ -16,6 +22,13 @@ import {
 type ResetPasswordFormValues = {
   password: string;
   passwordConfirmation: string;
+};
+
+type ResetErrorNotice = {
+  message: string;
+  token: string;
+  revision: number;
+  action?: 'retry' | 'reject';
 };
 
 type PasswordChangedModalProps = {
@@ -39,18 +52,21 @@ function PasswordChangedModal({ onLogin, visible }: PasswordChangedModalProps) {
 }
 
 export default function ResetPasswordRoute() {
-  const { showResetPasswordServerPendingAlert } = useAlerts();
-  async function requestPasswordReset(): Promise<boolean> {
-    showResetPasswordServerPendingAlert();
-    return false;
-  }
-
+  const { restore, state } = useAuth();
+  const params = useLocalSearchParams<{ token?: string | string[] }>();
+  const token = typeof params.token === 'string' ? params.token : '';
   const router = useRouter();
+  const [validatedToken, setValidatedToken] = useState<string | null>(null);
+  const [validationAttempt, setValidationAttempt] = useState(0);
   const [isComplete, setIsComplete] = useState(false);
+  const [errorNotice, setErrorNotice] = useState<ResetErrorNotice | null>(null);
+  const requestRevision = useRef(0);
+  const requestInFlight = useRef(false);
   const {
     control,
     formState: { errors, isSubmitting },
     handleSubmit,
+    reset,
     setFocus,
     watch,
   } = useForm<ResetPasswordFormValues>({
@@ -62,14 +78,85 @@ export default function ResetPasswordRoute() {
   });
   const passwordConfirmation = watch('passwordConfirmation');
 
-  const submitForm = handleSubmit(async () => {
-    const changed = await requestPasswordReset();
+  const rejectLink = useCallback((message: string, revision: number) => {
+    setValidatedToken(null);
+    setErrorNotice({ message, token, revision, action: 'reject' });
+  }, [token]);
 
-    if (changed) {
-      setIsComplete(true);
+  useFocusEffect(useCallback(() => {
+    const revision = ++requestRevision.current;
+    requestInFlight.current = false;
+    setValidatedToken(null);
+    setIsComplete(false);
+    setErrorNotice(null);
+    reset();
+    if (!/^[A-Za-z0-9_-]{43}$/.test(token)) {
+      rejectLink('비밀번호 재설정 링크가 만료되었거나 유효하지 않습니다.', revision);
+    } else {
+      void validatePasswordReset(token).then(() => {
+        if (requestRevision.current === revision) setValidatedToken(token);
+      }).catch((error: unknown) => {
+        if (requestRevision.current !== revision) return;
+        const message = getAuthErrorMessage(error);
+        if (error instanceof AuthApiError && error.status === 400) {
+          rejectLink(message, revision);
+        } else {
+          setErrorNotice({ message, token, revision, action: 'retry' });
+        }
+      });
     }
-  });
-  // 서버의 재설정 Token 정책이 확정되면 이 route의 접근 제어를 연결한다.
+    return () => {
+      requestRevision.current += 1;
+      setErrorNotice(null);
+    };
+  }, [rejectLink, reset, token, validationAttempt]));
+
+  const submitForm = () => {
+    const revision = requestRevision.current;
+    return handleSubmit(async ({ password }) => {
+      if (requestRevision.current !== revision) return;
+      if (requestInFlight.current || validatedToken !== token || isComplete) return;
+      requestInFlight.current = true;
+      try {
+        await resetPassword({ token, newPassword: password });
+        if (requestRevision.current === revision) setIsComplete(true);
+      } catch (error) {
+        if (requestRevision.current !== revision) return;
+        if (error instanceof AuthApiError && error.code === 'PASSWORD_RESET_INVALID') {
+          rejectLink(getAuthErrorMessage(error), revision);
+        } else {
+          setErrorNotice({ message: getAuthErrorMessage(error), token, revision });
+        }
+      } finally {
+        if (requestRevision.current === revision) requestInFlight.current = false;
+      }
+    })();
+  };
+
+  const currentError = errorNotice?.token === token &&
+    errorNotice.revision === requestRevision.current ? errorNotice : null;
+  const closeError = (confirmed: boolean) => {
+    if (!currentError || requestRevision.current !== currentError.revision ||
+      (!confirmed && currentError.action)) return;
+    requestRevision.current += 1;
+    setErrorNotice(null);
+    if (currentError.action === 'retry') setValidationAttempt((attempt) => attempt + 1);
+    if (currentError.action === 'reject') {
+      router.replace(state.status === 'signedIn' ? '/mypage' : '/find-password');
+    }
+  };
+  const errorModal = (
+    <NoticeModal
+      accessibilityLabel="요청을 확인해주세요."
+      confirmLabel="확인"
+      message={currentError ? `요청을 확인해주세요.\n${currentError.message}` : ''}
+      onConfirm={() => closeError(true)}
+      onRequestClose={() => closeError(false)}
+      visible={currentError !== null}
+    />
+  );
+
+  if (validatedToken !== token) return errorModal;
 
   return (
     <>
@@ -88,6 +175,7 @@ export default function ResetPasswordRoute() {
                 <FormTextField
                   accessibilityLabel="새 비밀번호"
                   autoComplete="new-password"
+                  editable={!isSubmitting && !isComplete}
                   error={errors.password?.message}
                   inputRef={ref}
                   label="비밀번호"
@@ -113,6 +201,7 @@ export default function ResetPasswordRoute() {
                 <FormTextField
                   accessibilityLabel="새 비밀번호 확인"
                   autoComplete="new-password"
+                  editable={!isSubmitting && !isComplete}
                   error={errors.passwordConfirmation?.message}
                   inputRef={ref}
                   label="비밀번호 확인"
@@ -134,7 +223,7 @@ export default function ResetPasswordRoute() {
           </View>
 
           <PrimaryButton
-            disabled={isSubmitting}
+            disabled={isSubmitting || isComplete}
             label="비밀번호 변경"
             onPress={submitForm}
           />
@@ -144,10 +233,12 @@ export default function ResetPasswordRoute() {
       <PasswordChangedModal
         onLogin={() => {
           setIsComplete(false);
-          router.replace('/login');
+          router.replace('/');
+          void restore();
         }}
         visible={isComplete}
       />
+      {errorModal}
     </>
   );
 }

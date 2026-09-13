@@ -403,6 +403,13 @@ export async function requestPasswordResetEmail(input: {
   return { message: stringField(data, 'message') };
 }
 
+export async function validatePasswordReset(token: string): Promise<void> {
+  await request('/auth/reset-password/validate', {
+    body: { token },
+    expectedStatus: 204,
+  });
+}
+
 export async function resetPassword(input: {
   token: string;
   newPassword: string;

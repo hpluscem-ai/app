@@ -17,6 +17,7 @@ import {
   requestPasswordResetEmail,
   requestMyPasswordResetEmail,
   resetPassword,
+  validatePasswordReset,
   sendPhoneVerification,
   sendPhoneChangeVerification,
   signup,
@@ -318,7 +319,7 @@ test('recovery binds SMS to its purpose and accepts only actual server results',
       return Response.json({ maskedEmail: 'dr****@example.test', phoneLastFour: '5678' });
     if (url.endsWith('/password-reset-emails'))
       return Response.json({ message: '서버 접수 안내' }, { status: 202 });
-    assert.ok(url.endsWith('/reset-password'));
+    assert.ok(url.endsWith('/reset-password') || url.endsWith('/reset-password/validate'));
     return new Response(null, { status: 204 });
   };
   for (const purpose of ['find_email', 'reset_password']) {
@@ -331,6 +332,7 @@ test('recovery binds SMS to its purpose and accepts only actual server results',
   assert.deepEqual(await requestPasswordResetEmail({ phone, email: ` ${email} `, verificationProof: 'proof' }), {
     message: '서버 접수 안내',
   });
+  await validatePasswordReset(token);
   await resetPassword({ token, newPassword: ' NewPassword!2 ', passwordConfirmation: 'excluded' });
   assert.deepEqual(requests, [
     { phone, purpose: 'find_email' },
@@ -339,9 +341,11 @@ test('recovery binds SMS to its purpose and accepts only actual server results',
     { code: '012345', purpose: 'reset_password' },
     { phone, verificationProof: 'proof' },
     { phone, email, verificationProof: 'proof' },
+    { token },
     { token, newPassword: ' NewPassword!2 ' },
   ]);
   globalThis.fetch = async () => Response.json({ message: 'success' });
+  await assert.rejects(validatePasswordReset(token), { code: 'INVALID_RESPONSE' });
   await assert.rejects(resetPassword({ token, newPassword: 'NewPassword!2' }), { code: 'INVALID_RESPONSE' });
   await assert.rejects(requestPasswordResetEmail({ phone, email, verificationProof: 'proof' }), { code: 'INVALID_RESPONSE' });
   globalThis.fetch = async () => Response.json({ maskedEmail: '', phoneLastFour: '5678' });
@@ -352,6 +356,8 @@ test('recovery binds SMS to its purpose and accepts only actual server results',
     [503, 'PASSWORD_RESET_EMAIL_NOT_CONFIGURED', () => requestPasswordResetEmail({ phone, email, verificationProof: 'proof' })],
     [502, 'PASSWORD_RESET_EMAIL_SEND_FAILED', () => requestPasswordResetEmail({ phone, email, verificationProof: 'proof' })],
     [400, 'PASSWORD_RESET_INVALID', () => resetPassword({ token, newPassword: 'NewPassword!2' })],
+    [400, 'PASSWORD_RESET_INVALID', () => validatePasswordReset(token)],
+    [500, 'INTERNAL_SERVER_ERROR', () => validatePasswordReset(token)],
   ]) {
     globalThis.fetch = async () => Response.json({ code, message: '서버 안내' }, { status });
     await assert.rejects(call(), (error) => error.status === status && error.code === code);

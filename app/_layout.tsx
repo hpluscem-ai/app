@@ -71,6 +71,10 @@ function RootNavigator() {
           }}
         >
           <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen
+            name="reset-password"
+            options={{ title: '비밀번호 재설정' }}
+          />
           <Stack.Protected guard={state.status === 'signedOut'}>
             <Stack.Screen name="login" options={{ title: '로그인' }} />
             <Stack.Screen name="sign-up" options={{ title: '회원가입' }} />
@@ -81,10 +85,6 @@ function RootNavigator() {
             <Stack.Screen
               name="find-password"
               options={{ title: '비밀번호 찾기' }}
-            />
-            <Stack.Screen
-              name="reset-password"
-              options={{ title: '비밀번호 재설정' }}
             />
           </Stack.Protected>
           <Stack.Protected guard={state.status === 'signedIn'}>
