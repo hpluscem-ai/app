@@ -9,26 +9,30 @@ import {
   View,
   type LayoutChangeEvent,
 } from 'react-native';
-import MapView, { type Region } from 'react-native-maps';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Supercluster from 'supercluster';
 
 import { AppScreen } from '../components/AppScreen';
 import {
+  MapCanvas,
+  type MapCanvasHandle,
+  type MapMarkerData,
+  type MapRegion,
   STATION_SHEET_COLLAPSED_HEIGHT,
   StationSheet,
   type StationSheetContent,
-} from '../components/map/StationSheet';
-import { StationMarker } from '../components/map/StationMarker';
+} from '../components/map';
 import { colors, typography } from '../constants/theme';
 import {
   previewMapStations,
   type MapCoordinate,
   type MapStation,
 } from '../data/mapStations';
-import { showTmapOpenFailedAlert } from '../utils/alerts';
+import { useAlerts } from '../utils/alerts';
+import { getAuthErrorMessage } from '../utils/authApi';
+import { getWebDirectionsUrl } from '../utils/mapDirections';
 
-const SEOUL_REGION: Region = {
+const SEOUL_REGION: MapRegion = {
   latitude: 37.5665,
   latitudeDelta: 1.1,
   longitude: 126.978,
@@ -45,16 +49,18 @@ type VisibleFeature =
   | Supercluster.PointFeature<StationPointProperties>;
 
 export default function MapRoute() {
+  const { showTmapOpenFailedAlert, showAuthErrorAlert } = useAlerts();
+
   const insets = useSafeAreaInsets();
-  const mapRef = useRef<MapView>(null);
+  const mapRef = useRef<MapCanvasHandle>(null);
   const [mapHeight, setMapHeight] = useState(0);
   const [mapReady, setMapReady] = useState(false);
+  const [mapFailed, setMapFailed] = useState(false);
   const [locationEnabled, setLocationEnabled] = useState(false);
   const [region, setRegion] = useState(SEOUL_REGION);
   const [selectedClusterId, setSelectedClusterId] = useState<number>();
   const [selectedStationId, setSelectedStationId] = useState<string>();
-  const [sheetContent, setSheetContent] =
-    useState<StationSheetContent>();
+  const [sheetContent, setSheetContent] = useState<StationSheetContent>();
   const [sheetVisible, setSheetVisible] = useState(false);
 
   const stationById = useMemo(
@@ -87,6 +93,37 @@ export default function MapRoute() {
     [clusterIndex, region],
   );
 
+  const markers = useMemo<MapMarkerData[]>(
+    () =>
+      visibleFeatures.flatMap((feature) => {
+        const [longitude, latitude] = feature.geometry.coordinates;
+        if (isClusterFeature(feature)) {
+          const id = feature.properties.cluster_id;
+          return [
+            {
+              id: `cluster-${id}`,
+              coordinate: { latitude, longitude },
+              count: feature.properties.point_count,
+              label: '',
+              selected: selectedClusterId === id,
+            },
+          ];
+        }
+        const station = stationById.get(feature.properties.stationId);
+        return station
+          ? [
+              {
+                id: station.id,
+                coordinate: station.coordinate,
+                label: getStationMarkerLabel(station),
+                selected: selectedStationId === station.id,
+              },
+            ]
+          : [];
+      }),
+    [visibleFeatures, selectedClusterId, selectedStationId, stationById],
+  );
+
   useEffect(() => {
     let active = true;
 
@@ -94,7 +131,10 @@ export default function MapRoute() {
       try {
         const permission = await Location.requestForegroundPermissionsAsync();
 
-        if (!active || permission.status !== Location.PermissionStatus.GRANTED) {
+        if (
+          !active ||
+          permission.status !== Location.PermissionStatus.GRANTED
+        ) {
           return;
         }
 
@@ -107,7 +147,7 @@ export default function MapRoute() {
           return;
         }
 
-        const currentRegion: Region = {
+        const currentRegion: MapRegion = {
           latitude: current.coords.latitude,
           latitudeDelta: 0.35,
           longitude: current.coords.longitude,
@@ -135,7 +175,7 @@ export default function MapRoute() {
       setSheetContent({ kind: 'station', station });
       setSheetVisible(true);
 
-      const nextRegion: Region = {
+      const nextRegion: MapRegion = {
         latitude: station.coordinate.latitude,
         latitudeDelta: zoomToStation
           ? Math.min(region.latitudeDelta, 0.08)
@@ -172,7 +212,7 @@ export default function MapRoute() {
         region.longitudeDelta,
         360 / 2 ** expansionZoom,
       );
-      const nextRegion: Region = {
+      const nextRegion: MapRegion = {
         latitude: coordinate.latitude,
         latitudeDelta:
           longitudeDelta * (region.latitudeDelta / region.longitudeDelta),
@@ -182,12 +222,7 @@ export default function MapRoute() {
 
       mapRef.current?.animateToRegion(nextRegion, 350);
     },
-    [
-      clusterIndex,
-      region.latitudeDelta,
-      region.longitudeDelta,
-      stationById,
-    ],
+    [clusterIndex, region.latitudeDelta, region.longitudeDelta, stationById],
   );
 
   const requestSheetClose = useCallback(() => {
@@ -200,41 +235,62 @@ export default function MapRoute() {
     setSelectedStationId(undefined);
   }, []);
 
-  const openTmapDirections = useCallback(async (station: MapStation) => {
-    if (!station.coordinateVerified) {
-      return;
-    }
-
-    const destinationName = encodeURIComponent(
-      `${station.pole} ${station.businessName}`,
-    );
-    const tmapUrl =
-      `tmap://route?goalname=${destinationName}` +
-      `&goalx=${station.coordinate.longitude}` +
-      `&goaly=${station.coordinate.latitude}`;
-
-    try {
-      await Linking.openURL(tmapUrl);
-      return;
-    } catch {
-      const storeUrl = Platform.select({
-        android:
-          'https://play.google.com/store/apps/details?id=com.skt.tmap.ku',
-        ios: 'https://apps.apple.com/kr/app/id431589174',
-      });
-
-      if (!storeUrl) {
-        showTmapOpenFailedAlert();
+  const openDirections = useCallback(
+    async (station: MapStation) => {
+      if (!station.coordinateVerified) {
         return;
       }
 
-      try {
-        await Linking.openURL(storeUrl);
-      } catch {
-        showTmapOpenFailedAlert();
+      if (Platform.OS === 'web') {
+        try {
+          const mobile =
+            /Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ||
+            (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+          await Linking.openURL(
+            getWebDirectionsUrl(
+              station.coordinate,
+              `${station.pole} ${station.businessName}`,
+              mobile ? process.env.EXPO_PUBLIC_TMAP_APP_KEY : undefined,
+            ),
+          );
+        } catch (error) {
+          showAuthErrorAlert(getAuthErrorMessage(error));
+        }
+        return;
       }
-    }
-  }, []);
+
+      const destinationName = encodeURIComponent(
+        `${station.pole} ${station.businessName}`,
+      );
+      const tmapUrl =
+        `tmap://route?goalname=${destinationName}` +
+        `&goalx=${station.coordinate.longitude}` +
+        `&goaly=${station.coordinate.latitude}`;
+
+      try {
+        await Linking.openURL(tmapUrl);
+        return;
+      } catch {
+        const storeUrl = Platform.select({
+          android:
+            'https://play.google.com/store/apps/details?id=com.skt.tmap.ku',
+          ios: 'https://apps.apple.com/kr/app/id431589174',
+        });
+
+        if (!storeUrl) {
+          showTmapOpenFailedAlert();
+          return;
+        }
+
+        try {
+          await Linking.openURL(storeUrl);
+        } catch {
+          showTmapOpenFailedAlert();
+        }
+      }
+    },
+    [showTmapOpenFailedAlert, showAuthErrorAlert],
+  );
 
   const handleMapLayout = useCallback((event: LayoutChangeEvent) => {
     setMapHeight(event.nativeEvent.layout.height);
@@ -250,75 +306,38 @@ export default function MapRoute() {
       showFooter={false}
       variant="main"
     >
-      <View
-        onLayout={handleMapLayout}
-        style={styles.mapFrame}
-      >
-        <MapView
+      <View onLayout={handleMapLayout} style={styles.mapFrame}>
+        <MapCanvas
           initialRegion={SEOUL_REGION}
-          loadingEnabled
-          mapPadding={{
-            bottom:
-              (sheetContent ? STATION_SHEET_COLLAPSED_HEIGHT : 72) +
-              insets.bottom,
-            left: 0,
-            right: 0,
-            top: 0,
+          bottomPadding={
+            (sheetContent ? STATION_SHEET_COLLAPSED_HEIGHT : 72) + insets.bottom
+          }
+          markers={markers}
+          locationEnabled={locationEnabled}
+          onReady={() => {
+            setMapFailed(false);
+            setMapReady(true);
           }}
-          onMapReady={() => setMapReady(true)}
+          onError={(error) => {
+            setMapFailed(true);
+            showAuthErrorAlert(getAuthErrorMessage(error));
+          }}
           onPress={requestSheetClose}
+          onMarkerPress={(id) => {
+            if (id.startsWith('cluster-')) {
+              const clusterId = Number(id.slice('cluster-'.length));
+              const marker = markers.find((item) => item.id === id);
+              if (marker) showCluster(clusterId, marker.coordinate);
+            } else {
+              const station = stationById.get(id);
+              if (station) showStation(station, true);
+            }
+          }}
           onRegionChangeComplete={setRegion}
-          pitchEnabled={false}
           ref={mapRef}
-          rotateEnabled={false}
-          showsCompass={false}
-          showsMyLocationButton={false}
-          showsUserLocation={locationEnabled}
-          style={StyleSheet.absoluteFill}
-          toolbarEnabled={false}
-        >
-          {visibleFeatures.map((feature) => {
-            const [longitude, latitude] = feature.geometry.coordinates;
+        />
 
-            if (isClusterFeature(feature)) {
-              const clusterId = feature.properties.cluster_id;
-              const selected = selectedClusterId === clusterId;
-
-              return (
-                <StationMarker
-                  coordinate={{ latitude, longitude }}
-                  count={feature.properties.point_count}
-                  key={`cluster-${clusterId}-${selected}`}
-                  label=""
-                  onPress={() =>
-                    showCluster(clusterId, { latitude, longitude })
-                  }
-                  selected={selected}
-                />
-              );
-            }
-
-            const station = stationById.get(feature.properties.stationId);
-
-            if (!station) {
-              return null;
-            }
-
-            const selected = selectedStationId === station.id;
-
-            return (
-              <StationMarker
-                coordinate={station.coordinate}
-                key={`${station.id}-${selected}`}
-                label={getStationMarkerLabel(station)}
-                onPress={() => showStation(station, true)}
-                selected={selected}
-              />
-            );
-          })}
-        </MapView>
-
-        {!mapReady ? (
+        {!mapReady && !mapFailed ? (
           <View pointerEvents="none" style={styles.loadingOverlay}>
             <ActivityIndicator color={colors.mileageAction} />
             <Text style={styles.loadingLabel}>지도를 불러오고 있습니다.</Text>
@@ -329,7 +348,7 @@ export default function MapRoute() {
           <StationSheet
             content={sheetContent}
             height={mapHeight}
-            onDirections={openTmapDirections}
+            onDirections={openDirections}
             onHidden={clearHiddenSheet}
             onRequestClose={requestSheetClose}
             onSelectStation={(station) => showStation(station, true)}
@@ -347,7 +366,7 @@ function isClusterFeature(
   return 'cluster' in feature.properties && feature.properties.cluster === true;
 }
 
-function getBoundingBox(region: Region): [number, number, number, number] {
+function getBoundingBox(region: MapRegion): [number, number, number, number] {
   const halfLatitude = region.latitudeDelta / 2;
   const halfLongitude = region.longitudeDelta / 2;
 
@@ -359,7 +378,7 @@ function getBoundingBox(region: Region): [number, number, number, number] {
   ];
 }
 
-function getZoom(region: Region) {
+function getZoom(region: MapRegion) {
   const zoom = Math.round(Math.log2(360 / region.longitudeDelta));
 
   return Math.max(0, Math.min(20, zoom));

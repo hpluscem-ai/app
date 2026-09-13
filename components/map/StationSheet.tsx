@@ -3,6 +3,7 @@ import {
   AccessibilityInfo,
   Animated,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -339,7 +340,9 @@ function StationCard({
           accessibilityHint={
             directionsDisabled
               ? '실제 좌표가 등록되면 사용할 수 있습니다.'
-              : '티맵으로 목적지 안내를 시작합니다.'
+              : Platform.OS === 'web'
+                ? '목적지 안내를 시작합니다.'
+                : '티맵으로 목적지 안내를 시작합니다.'
           }
           accessibilityLabel="길안내"
           accessibilityRole="button"

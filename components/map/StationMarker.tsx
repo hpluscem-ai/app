@@ -1,7 +1,6 @@
-import { StyleSheet, Text, View } from 'react-native';
 import { Marker, type LatLng } from 'react-native-maps';
 
-import { colors, typography } from '../../constants/theme';
+import { StationMarkerContent } from './StationMarkerContent';
 
 type StationMarkerProps = {
   coordinate: LatLng;
@@ -33,52 +32,7 @@ export function StationMarker({
       stopPropagation
       tracksViewChanges={false}
     >
-      <View
-        style={[
-          styles.marker,
-          cluster && styles.cluster,
-          selected && styles.selected,
-        ]}
-      >
-        <Text
-          numberOfLines={1}
-          style={[styles.label, selected && styles.selectedLabel]}
-        >
-          {cluster ? count : label}
-        </Text>
-      </View>
+      <StationMarkerContent count={count} label={label} selected={selected} />
     </Marker>
   );
 }
-
-const styles = StyleSheet.create({
-  marker: {
-    minWidth: 28,
-    maxWidth: 220,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 16,
-    backgroundColor: colors.white,
-    paddingHorizontal: 8,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  cluster: {
-    width: 28,
-    paddingHorizontal: 0,
-  },
-  selected: {
-    backgroundColor: colors.brand500,
-  },
-  label: {
-    ...typography.suitMedium14,
-    color: colors.gray800,
-  },
-  selectedLabel: {
-    color: colors.white,
-  },
-});
