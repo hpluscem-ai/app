@@ -347,9 +347,7 @@ export function PhoneVerificationSection({
         )}
         rules={{
           validate: (value) =>
-            !required && !value && !getValues('phone')
-              ? true
-              : validateVerificationCode(value),
+            !required ? true : validateVerificationCode(value),
         }}
       />
       {expiresAt !== null ? (
