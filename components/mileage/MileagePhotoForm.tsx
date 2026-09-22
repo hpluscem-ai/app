@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import { useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 
 import { colors, typography } from '../../constants/theme';
 import { useAlerts } from '../../utils/alerts';
+import { AuthApiError, getAuthErrorMessage } from '../../utils/authApi';
+import { validateMileagePhoto } from '../../utils/mileagePhotos';
 import { PrimaryButton } from '../auth/PrimaryButton';
 import { UploadCard, type UploadKind } from './UploadCard';
 
@@ -18,36 +21,14 @@ export type MileagePhotoSelection = {
 type MileagePhotoFormProps = {
   fillAvailableSpace?: boolean;
   intro: string;
-  onValidSubmit: (selection: MileagePhotoSelection) => void;
+  onValidSubmit: (selection: MileagePhotoSelection) => void | Promise<void>;
+  onSelectionChange?: () => void;
+  locked?: boolean;
+  existingImages?: { receipt: { uri: string } | null; dashboard: { uri: string } | null };
+  onImageError?: () => void;
   requirement: MileagePhotoRequirement;
   submitLabel: string;
 };
-
-const MAX_IMAGE_BYTES = 50 * 1024 * 1024;
-const SUPPORTED_IMAGE_FORMATS = new Set(['heic', 'heif', 'jpeg', 'jpg', 'png']);
-
-function isSupportedImageFormat(asset: ImagePicker.ImagePickerAsset) {
-  const mimeType = asset.mimeType?.toLowerCase();
-
-  if (mimeType) {
-    const [type, format] = mimeType.split('/');
-    return type === 'image' && SUPPORTED_IMAGE_FORMATS.has(format);
-  }
-
-  const fileName = (asset.fileName ?? asset.uri.split('/').pop() ?? '').split(
-    /[?#]/,
-    1,
-  )[0];
-  const extensionSeparator = fileName.lastIndexOf('.');
-
-  if (extensionSeparator < 0) {
-    return true;
-  }
-
-  return SUPPORTED_IMAGE_FORMATS.has(
-    fileName.slice(extensionSeparator + 1).toLowerCase(),
-  );
-}
 
 export function MileagePhotoForm({
   fillAvailableSpace = false,
@@ -55,6 +36,10 @@ export function MileagePhotoForm({
   onValidSubmit,
   requirement,
   submitLabel,
+  locked = false,
+  onSelectionChange,
+  existingImages,
+  onImageError,
 }: MileagePhotoFormProps) {
   const {
     showImageSourceActions,
@@ -65,6 +50,7 @@ export function MileagePhotoForm({
     showMileageAtLeastOneImageRequiredAlert,
     showMileageImagesRequiredAlert,
     showUnsupportedImageFormatAlert,
+    showAuthErrorAlert,
   } = useAlerts();
 
   const [receiptImage, setReceiptImage] =
@@ -72,11 +58,24 @@ export function MileagePhotoForm({
   const [dashboardImage, setDashboardImage] =
     useState<ImagePicker.ImagePickerAsset | null>(null);
   const [showErrors, setShowErrors] = useState(false);
+  const [hidden, setHidden] = useState({ receipt: false, dashboard: false });
+  const pickerRevision = useRef(0);
+  const focused = useRef(false);
+  const lockedRef = useRef(locked);
+  lockedRef.current = locked;
+  useFocusEffect(useCallback(() => {
+    focused.current = true;
+    return () => { focused.current = false; pickerRevision.current += 1; };
+  }, []));
 
   const pickImage = async (kind: UploadKind, source: ImageSource) => {
+    if (lockedRef.current || !focused.current) return;
+    const revision = ++pickerRevision.current;
+    const current = () => focused.current && revision === pickerRevision.current && !lockedRef.current;
     try {
       if (source === 'camera' && Platform.OS !== 'web') {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!current()) return;
 
         if (!permission.granted) {
           showCameraPermissionAlert();
@@ -89,6 +88,7 @@ export function MileagePhotoForm({
           ? ImagePicker.launchCameraAsync
           : ImagePicker.launchImageLibraryAsync;
       const result = await launchImage({ mediaTypes: ['images'], quality: 1 });
+      if (!current()) return;
 
       if (result.canceled) {
         return;
@@ -101,28 +101,20 @@ export function MileagePhotoForm({
         return;
       }
 
-      if (!isSupportedImageFormat(asset)) {
-        showUnsupportedImageFormatAlert();
-        return;
-      }
-
-      if (asset.fileSize == null) {
-        showImageSizeUnavailableAlert();
-        return;
-      }
-
-      if (asset.fileSize > MAX_IMAGE_BYTES) {
-        showImageSizeLimitAlert();
-        return;
-      }
-
+      validateMileagePhoto(asset);
+      onSelectionChange?.();
       if (kind === 'receipt') {
         setReceiptImage(asset);
       } else {
         setDashboardImage(asset);
       }
-    } catch {
-      showImagePickerErrorAlert();
+    } catch (error) {
+      if (!current()) return;
+      if (!(error instanceof AuthApiError)) showImagePickerErrorAlert();
+      else if (error.code === 'UNSUPPORTED_PHOTO_TYPE') showUnsupportedImageFormatAlert();
+      else if (error.code === 'PHOTO_TOO_LARGE') showImageSizeLimitAlert();
+      else if (error.code === 'PHOTO_SIZE_UNAVAILABLE') showImageSizeUnavailableAlert();
+      else showAuthErrorAlert(getAuthErrorMessage(error));
     }
   };
 
@@ -134,6 +126,7 @@ export function MileagePhotoForm({
   };
 
   const submitImages = () => {
+    if (lockedRef.current || !focused.current) return;
     const hasRequiredImages =
       requirement === 'both'
         ? Boolean(receiptImage && dashboardImage)
@@ -152,7 +145,8 @@ export function MileagePhotoForm({
     }
 
     setShowErrors(false);
-    onValidSubmit({ dashboard: dashboardImage, receipt: receiptImage });
+    pickerRevision.current += 1;
+    void onValidSubmit({ dashboard: dashboardImage, receipt: receiptImage });
   };
 
   const atLeastOneImageMissing = !receiptImage && !dashboardImage;
@@ -172,10 +166,12 @@ export function MileagePhotoForm({
               showErrors &&
               (requirement === 'both' ? !receiptImage : atLeastOneImageMissing)
             }
-            image={receiptImage}
+            image={receiptImage ?? (!hidden.receipt ? existingImages?.receipt ?? null : null)}
             kind="receipt"
             onChoose={() => chooseImage('receipt')}
-            onRemove={() => setReceiptImage(null)}
+            onRemove={() => { if (lockedRef.current) return; onSelectionChange?.(); setReceiptImage(null); setHidden(value => ({ ...value, receipt: true })); }}
+            disabled={locked}
+            onImageError={onImageError}
           />
           <UploadCard
             error={
@@ -184,16 +180,18 @@ export function MileagePhotoForm({
                 ? !dashboardImage
                 : atLeastOneImageMissing)
             }
-            image={dashboardImage}
+            image={dashboardImage ?? (!hidden.dashboard ? existingImages?.dashboard ?? null : null)}
             kind="dashboard"
             onChoose={() => chooseImage('dashboard')}
-            onRemove={() => setDashboardImage(null)}
+            onRemove={() => { if (lockedRef.current) return; onSelectionChange?.(); setDashboardImage(null); setHidden(value => ({ ...value, dashboard: true })); }}
+            disabled={locked}
+            onImageError={onImageError}
           />
         </View>
       </View>
 
       <View style={fillAvailableSpace ? styles.submitSection : undefined}>
-        <PrimaryButton label={submitLabel} onPress={submitImages} />
+        <PrimaryButton label={submitLabel} onPress={submitImages} disabled={locked} />
       </View>
     </View>
   );

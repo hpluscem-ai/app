@@ -11,10 +11,12 @@ export type UploadKind = 'receipt' | 'dashboard';
 type UploadCardProps = {
   error: boolean;
   emptyLabel?: string;
-  image: ImagePickerAsset | null;
+  image: Pick<ImagePickerAsset, 'uri'> | null;
   kind: UploadKind;
   onChoose?: () => void;
   onRemove?: () => void;
+  disabled?: boolean;
+  onImageError?: () => void;
 };
 
 const uploadCopy = {
@@ -35,6 +37,8 @@ export function UploadCard({
   kind,
   onChoose,
   onRemove,
+  disabled = false,
+  onImageError,
 }: UploadCardProps) {
   const copy = uploadCopy[kind];
   const label = emptyLabel ?? copy.placeholder;
@@ -49,6 +53,7 @@ export function UploadCard({
             accessibilityLabel={`${copy.selected} 미리보기`}
             resizeMode="cover"
             source={{ uri: image.uri }}
+            onError={onImageError}
             style={StyleSheet.absoluteFill}
           />
           {onRemove ? (
@@ -57,6 +62,7 @@ export function UploadCard({
               accessibilityRole="button"
               hitSlop={8}
               onPress={onRemove}
+              disabled={disabled}
               style={({ pressed }) => [
                 styles.previewLabel,
                 pressed && styles.pressed,
@@ -111,6 +117,7 @@ export function UploadCard({
         }
         accessibilityRole="button"
         onPress={onChoose}
+        disabled={disabled}
         style={({ pressed }) => [
           styles.uploadCard,
           styles.emptyUploadCard,

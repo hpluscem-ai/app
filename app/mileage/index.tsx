@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import {
   AccessibilityInfo,
   Animated,
@@ -20,6 +20,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AppScreen } from '../../components/AppScreen';
 import { useAuth } from '../../components/AuthProvider';
+import { NoticeModal } from '../../components/NoticeModal';
+import { AuthApiError, getAuthErrorMessage } from '../../utils/authApi';
+import { getMileageApplications, mileageQuery, type MileageFilter, type MileageQuery } from '../../utils/mileageApi';
 import { MileageWaterJugIcon } from '../../components/icons/MileageWaterJugIcon';
 import { colors, typography, webAppFrame } from '../../constants/theme';
 
@@ -30,7 +33,7 @@ type MileageHistorySort = 'latest' | 'oldest';
 type MileageHistoryItem = {
   dateLabel: string;
   id: string;
-  mileage: number;
+  mileage: number | null;
   status: MileageHistoryStatus;
 };
 
@@ -102,29 +105,68 @@ function getInitialCustomRange() {
 
 export default function MileageRoute() {
   const router = useRouter();
-  const { state } = useAuth();
+  const { state, request } = useAuth();
+  const [filter, setFilter] = useState<MileageFilter>(() => ({ period: 'threeMonths', sort: 'latest', ...getInitialCustomRange() }));
+  const [items, setItems] = useState<MileageHistoryItem[] | undefined>();
+  const [notice, setNotice] = useState<{ message: string; retry?: () => void } | null>(null);
+  type Listing = { controller: AbortController; query: MileageQuery; cursor: string | null; busy: boolean; failed: boolean };
+  const listing = useRef<Listing | null>(null);
+
+  const loadPage = useCallback(async (scope: Listing, append: boolean) => {
+    if (listing.current !== scope || scope.controller.signal.aborted || scope.busy || (append && !scope.cursor)) return;
+    scope.busy = true;
+    scope.failed = false;
+    const cursor = append ? scope.cursor! : undefined;
+    try {
+      const data = await request(session => getMileageApplications({ ...scope.query, ...(cursor ? { cursor } : {}) }, session, scope.controller.signal));
+      if (listing.current !== scope || scope.controller.signal.aborted) return;
+      if (data.nextCursor && data.nextCursor === cursor) throw new AuthApiError('다음 내역을 확인하지 못했습니다.', 'INVALID_RESPONSE');
+      const rows = data.items.map(item => ({
+        id: item.id, dateLabel: formatLocalDate(new Date(item.submittedAt)), mileage: item.mileageAmount,
+        status: item.status === 'approved' ? 'credited' as const : item.status,
+      }));
+      scope.cursor = data.nextCursor;
+      setItems(previous => append ? [...(previous ?? []).filter(item => !rows.some(row => row.id === item.id)), ...rows] : rows);
+    } catch (error) {
+      if (listing.current !== scope || scope.controller.signal.aborted) return;
+      scope.failed = true;
+      setNotice({ message: getAuthErrorMessage(error), retry: () => { void loadPage(scope, append); } });
+    } finally {
+      scope.busy = false;
+    }
+  }, [request]);
+
+  useFocusEffect(useCallback(() => {
+    const scope: Listing = { controller: new AbortController(), query: mileageQuery(filter), cursor: null, busy: false, failed: false };
+    listing.current = scope;
+    setItems(undefined);
+    setNotice(null);
+    void loadPage(scope, false);
+    return () => { scope.controller.abort(); listing.current = null; setNotice(null); setItems(undefined); };
+  }, [filter, state.user?.id, loadPage]));
 
   return (
-    <AppScreen activeTab="mileage" showFooter={false} variant="main">
-      <MileageHero
-        userName={state.user?.name}
-        onApply={() => {
-          router.push('/mileage/apply');
-        }}
-      />
-      <View style={styles.content}>
-        <MileageBalanceCard />
-        <MileageHistory
-          onOpenStatus={(status) => {
-            router.push(
-              status === 'pending'
-                ? '/mileage/pending'
-                : '/mileage/rejected',
-            );
-          }}
-        />
-      </View>
-    </AppScreen>
+    <>
+      <AppScreen activeTab="mileage" showFooter={false} variant="main" onEndReached={() => {
+        const scope = listing.current;
+        if (scope && !scope.failed) void loadPage(scope, true);
+      }}>
+        <MileageHero userName={state.user?.name} onApply={() => router.push('/mileage/apply')} />
+        <View style={styles.content}>
+          <MileageBalanceCard />
+          <MileageHistory items={items} appliedFilter={filter}
+            onQueryChange={next => {
+              try { mileageQuery(next); setFilter(next); return true; }
+              catch (error) { setNotice({ message: getAuthErrorMessage(error) }); return false; }
+            }}
+            onOpenStatus={(status, id) => router.push({ pathname: '/mileage/[status]', params: { status, id } })} />
+        </View>
+      </AppScreen>
+      <NoticeModal accessibilityLabel="마일리지 조회 안내" confirmLabel={notice?.retry ? '다시 시도' : '확인'}
+        message={notice?.message ?? ''} visible={notice !== null}
+        onRequestClose={() => setNotice(null)}
+        onConfirm={() => { const retry = notice?.retry; setNotice(null); retry?.(); }} />
+    </>
   );
 }
 
@@ -180,11 +222,11 @@ function MileageHero({
 }
 
 function MileageBalanceCard({ balance }: { balance?: number }) {
-  const balanceLabel = (balance ?? 0).toLocaleString('ko-KR');
+  const balanceLabel = balance === undefined ? '-' : balance.toLocaleString('ko-KR');
 
   return (
     <View
-      accessibilityLabel={`누적 마일리지 ${balanceLabel}마일`}
+      accessibilityLabel={balance === undefined ? '누적 마일리지 서버 연동 대기' : `누적 마일리지 ${balanceLabel}마일`}
       accessible
       style={styles.balanceCard}
     >
@@ -212,9 +254,13 @@ function MileageBalanceCard({ balance }: { balance?: number }) {
 function MileageHistory({
   items,
   onOpenStatus,
+  onQueryChange,
+  appliedFilter,
 }: {
   items?: readonly MileageHistoryItem[];
-  onOpenStatus: (status: 'pending' | 'rejected') => void;
+  onQueryChange: (filter: MileageFilter) => boolean;
+  appliedFilter: MileageFilter;
+  onOpenStatus: (status: 'pending' | 'rejected', id: string) => void;
 }) {
   const [filterVisible, setFilterVisible] = useState(false);
   const [period, setPeriod] =
@@ -225,10 +271,10 @@ function MileageHistory({
   const [customStartDate, setCustomStartDate] = useState(initialStartDate);
   const [customEndDate, setCustomEndDate] = useState(initialEndDate);
   const periodLabel =
-    historyPeriodOptions.find((option) => option.value === period)?.label ??
+    historyPeriodOptions.find((option) => option.value === appliedFilter.period)?.label ??
     '최근 3개월';
   const sortLabel =
-    historySortOptions.find((option) => option.value === sort)?.label ??
+    historySortOptions.find((option) => option.value === appliedFilter.sort)?.label ??
     '최신순';
 
   return (
@@ -258,7 +304,7 @@ function MileageHistory({
         </View>
 
         {items === undefined ? (
-          <MileageHistoryMessage loaded={false} />
+          <View style={styles.historyMessage} />
         ) : items.length === 0 ? (
           <MileageHistoryMessage loaded />
         ) : (
@@ -285,6 +331,7 @@ function MileageHistory({
           setCustomStartDate(formatDateInput(value));
         }}
         onClose={() => {
+          onQueryChange({ period, sort, startDate: customStartDate, endDate: customEndDate });
           Keyboard.dismiss();
           setFilterVisible(false);
         }}
@@ -553,7 +600,7 @@ function MileageHistoryRow({
   onOpenStatus,
 }: {
   item: MileageHistoryItem;
-  onOpenStatus: (status: 'pending' | 'rejected') => void;
+  onOpenStatus: (status: 'pending' | 'rejected', id: string) => void;
 }) {
   const config = historyStatus[item.status];
   const actionableStatus =
@@ -562,7 +609,7 @@ function MileageHistoryRow({
       : null;
   const amountPrefix =
     item.status === 'credited' ? '+' : item.status === 'settled' ? '-' : '';
-  const amountLabel = `${amountPrefix}${item.mileage.toLocaleString('ko-KR')}마일`;
+  const amountLabel = item.mileage === null ? '-' : `${amountPrefix}${item.mileage.toLocaleString('ko-KR')}마일`;
   const badge = (
     <View
       style={[
@@ -588,7 +635,7 @@ function MileageHistoryRow({
           accessibilityRole="button"
           hitSlop={8}
           onPress={() => {
-            onOpenStatus(actionableStatus);
+            onOpenStatus(actionableStatus, item.id);
           }}
           style={({ pressed }) => pressed && styles.pressed}
         >
