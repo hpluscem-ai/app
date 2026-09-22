@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import type { MapStation } from '../../data/mapStations';
+import { hasMapCoordinate, type MapStation } from '../../data/mapStations';
 import { colors, typography } from '../../constants/theme';
 import { DirectionsIcon } from '../icons/DirectionsIcon';
 
@@ -30,6 +30,7 @@ export type StationSheetContent =
 
 type StationSheetProps = {
   content: StationSheetContent;
+  selectionKey: number;
   height: number;
   onDirections: (station: MapStation) => void;
   onHidden: () => void;
@@ -40,6 +41,7 @@ type StationSheetProps = {
 
 export function StationSheet({
   content,
+  selectionKey,
   height,
   onDirections,
   onHidden,
@@ -72,7 +74,7 @@ export function StationSheet({
 
   useEffect(() => {
     contentScrollYRef.current = 0;
-  }, [content]);
+  }, [selectionKey]);
 
   useEffect(() => {
     let active = true;
@@ -128,7 +130,7 @@ export function StationSheet({
     }
 
     snapTo('closed', () => onHiddenRef.current());
-  }, [content, snapTo, visible]);
+  }, [content.kind, selectionKey, snapTo, visible]);
 
   const panResponder = useMemo(
     () =>
@@ -288,7 +290,7 @@ function StationCard({
   onSelect?: (station: MapStation) => void;
   station: MapStation;
 }) {
-  const directionsDisabled = !station.coordinateVerified;
+  const directionsDisabled = !hasMapCoordinate(station.coordinate);
   const stationCopy = (
     <>
       <View style={styles.stationHeading}>

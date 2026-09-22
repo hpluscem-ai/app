@@ -43,7 +43,7 @@ export function MapCanvas({ ref, ...props }: MapCanvasProps) {
     >
       {props.markers.map((marker) => (
         <StationMarker
-          key={`${marker.id}-${marker.selected}`}
+          key={JSON.stringify([marker.id, marker.selected, marker.label, marker.count])}
           coordinate={marker.coordinate}
           count={marker.count}
           label={marker.label}

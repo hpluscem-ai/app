@@ -108,7 +108,7 @@ function expiration(value: unknown): string {
   return expiresAt;
 }
 
-async function request(
+export async function request(
   path: string,
   options: {
     body?: unknown;

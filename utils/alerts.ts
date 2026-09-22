@@ -114,8 +114,8 @@ export function useAlerts() {
       );
     }
 
-    function showAuthErrorAlert(message: string) {
-      notify('요청을 확인해주세요.', message);
+    function showAuthErrorAlert(message: string, onConfirm?: () => void) {
+      notify('요청을 확인해주세요.', message, onConfirm, !onConfirm);
     }
 
     function showSignupSuccessAlert(onConfirm: () => void) {

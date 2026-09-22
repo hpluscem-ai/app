@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import * as Linking from 'expo-linking';
 import * as Location from 'expo-location';
+import { useFocusEffect } from 'expo-router';
 import {
   ActivityIndicator,
   Platform,
@@ -13,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Supercluster from 'supercluster';
 
 import { AppScreen } from '../components/AppScreen';
+import { useAuth } from '../components/AuthProvider';
 import {
   MapCanvas,
   type MapCanvasHandle,
@@ -24,13 +26,14 @@ import {
 } from '../components/map';
 import { colors, typography } from '../constants/theme';
 import {
-  previewMapStations,
+  hasMapCoordinate,
   type MapCoordinate,
   type MapStation,
 } from '../data/mapStations';
 import { useAlerts } from '../utils/alerts';
-import { getAuthErrorMessage } from '../utils/authApi';
+import { AuthApiError, getAuthErrorMessage } from '../utils/authApi';
 import { getWebDirectionsUrl } from '../utils/mapDirections';
+import { getMapBounds, getMapStation, getMapStations } from '../utils/stationsApi';
 
 const SEOUL_REGION: MapRegion = {
   latitude: 37.5665,
@@ -48,29 +51,97 @@ type VisibleFeature =
   | Supercluster.ClusterFeature<ClusterProperties>
   | Supercluster.PointFeature<StationPointProperties>;
 
+type StationSelection = {
+  key: number;
+  kind: StationSheetContent['kind'];
+  ids: string[];
+};
+
 export default function MapRoute() {
   const { showTmapOpenFailedAlert, showAuthErrorAlert } = useAlerts();
+  const { request, state: authState } = useAuth();
+  const userId = authState.user?.id;
 
   const insets = useSafeAreaInsets();
   const mapRef = useRef<MapCanvasHandle>(null);
+  const activeFocus = useRef<object | null>(null);
   const [mapHeight, setMapHeight] = useState(0);
   const [mapReady, setMapReady] = useState(false);
   const [mapFailed, setMapFailed] = useState(false);
   const [locationEnabled, setLocationEnabled] = useState(false);
   const [region, setRegion] = useState(SEOUL_REGION);
-  const [selectedClusterId, setSelectedClusterId] = useState<number>();
-  const [selectedStationId, setSelectedStationId] = useState<string>();
+  const [stations, setStations] = useState<MapStation[]>([]);
+  const [selection, setSelection] = useState<StationSelection>();
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [sheetContent, setSheetContent] = useState<StationSheetContent>();
   const [sheetVisible, setSheetVisible] = useState(false);
 
   const stationById = useMemo(
-    () => new Map(previewMapStations.map((station) => [station.id, station])),
-    [],
+    () => new Map(stations.map((station) => [station.id, station])),
+    [stations],
   );
+  const bounds = useMemo(() => getMapBounds(region), [region]);
+
+  useFocusEffect(useCallback(() => {
+    if (!userId) return;
+    const focus = {};
+    activeFocus.current = focus;
+    return () => { activeFocus.current = null; };
+  }, [userId]));
+
+  useEffect(() => {
+    setStations([]);
+    setSelection(undefined);
+    setSheetVisible(false);
+    setSheetContent(undefined);
+  }, [userId]);
+
+  useFocusEffect(useCallback(() => {
+    if (!userId || !bounds) return;
+    let active = true;
+    const focus = activeFocus.current;
+    void request((session) => getMapStations(bounds, session)).then((loaded) => {
+      if (active) setStations(loaded);
+    }).catch((error: unknown) => {
+      if (active && !isSessionError(error)) {
+        showAuthErrorAlert(getAuthErrorMessage(error), () => {
+          if (focus && activeFocus.current === focus) setLoadAttempt((attempt) => attempt + 1);
+        });
+      }
+    });
+    return () => { active = false; };
+  }, [bounds, loadAttempt, request, showAuthErrorAlert, userId]));
+
+  useFocusEffect(useCallback(() => {
+    if (!userId || !selection || !sheetVisible) return;
+    let active = true;
+    const focus = activeFocus.current;
+    // A viewport miss can mean offscreen, so only the detail API can remove a selection.
+    void Promise.all(selection.ids.map((id) => stationById.get(id) ??
+      request((session) => getMapStation(id, session)))).then((results) => {
+      if (!active) return;
+      const currentStations = results.filter((station): station is MapStation => station !== null);
+      if (currentStations.length === 0) {
+        setSheetVisible(false);
+        return;
+      }
+      const content: StationSheetContent = selection.kind === 'station'
+        ? { kind: 'station', station: currentStations[0] }
+        : { kind: 'cluster', stations: currentStations };
+      setSheetContent((current) => JSON.stringify(current) === JSON.stringify(content) ? current : content);
+    }).catch((error: unknown) => {
+      if (active && !isSessionError(error)) {
+        showAuthErrorAlert(getAuthErrorMessage(error), () => {
+          if (focus && activeFocus.current === focus) setLoadAttempt((attempt) => attempt + 1);
+        });
+      }
+    });
+    return () => { active = false; };
+  }, [loadAttempt, request, selection, sheetVisible, showAuthErrorAlert, stationById, userId]));
 
   const clusterIndex = useMemo(() => {
     const points: Array<Supercluster.PointFeature<StationPointProperties>> =
-      previewMapStations.map((station) => ({
+      stations.map((station) => ({
         geometry: {
           coordinates: [
             station.coordinate.longitude,
@@ -86,16 +157,18 @@ export default function MapRoute() {
       maxZoom: 17,
       radius: 52,
     }).load(points);
-  }, []);
+  }, [stations]);
 
   const visibleFeatures = useMemo(
-    () => clusterIndex.getClusters(getBoundingBox(region), getZoom(region)),
-    [clusterIndex, region],
+    () => bounds ? clusterIndex.getClusters(bounds, getZoom(region)) : [],
+    [bounds, clusterIndex, region],
   );
 
   const markers = useMemo<MapMarkerData[]>(
-    () =>
-      visibleFeatures.flatMap((feature) => {
+    () => {
+      const selectedIds = new Set(sheetContent?.kind === 'cluster'
+        ? sheetContent.stations.map((station) => station.id) : []);
+      return visibleFeatures.flatMap((feature) => {
         const [longitude, latitude] = feature.geometry.coordinates;
         if (isClusterFeature(feature)) {
           const id = feature.properties.cluster_id;
@@ -105,7 +178,9 @@ export default function MapRoute() {
               coordinate: { latitude, longitude },
               count: feature.properties.point_count,
               label: '',
-              selected: selectedClusterId === id,
+              selected: sheetContent?.kind === 'cluster' &&
+                sheetContent.stations.length === feature.properties.point_count &&
+                clusterIndex.getLeaves(id, Infinity).every((point) => selectedIds.has(point.properties.stationId)),
             },
           ];
         }
@@ -116,12 +191,13 @@ export default function MapRoute() {
                 id: station.id,
                 coordinate: station.coordinate,
                 label: getStationMarkerLabel(station),
-                selected: selectedStationId === station.id,
+                selected: sheetContent?.kind === 'station' && sheetContent.station.id === station.id,
               },
             ]
           : [];
-      }),
-    [visibleFeatures, selectedClusterId, selectedStationId, stationById],
+      });
+    },
+    [clusterIndex, sheetContent, stationById, visibleFeatures],
   );
 
   useEffect(() => {
@@ -170,8 +246,9 @@ export default function MapRoute() {
 
   const showStation = useCallback(
     (station: MapStation, zoomToStation = false) => {
-      setSelectedClusterId(undefined);
-      setSelectedStationId(station.id);
+      if (stationById.get(station.id) !== station &&
+        !(sheetContent?.kind === 'cluster' && sheetContent.stations.includes(station))) return;
+      setSelection((current) => ({ key: (current?.key ?? 0) + 1, kind: 'station', ids: [station.id] }));
       setSheetContent({ kind: 'station', station });
       setSheetVisible(true);
 
@@ -188,7 +265,7 @@ export default function MapRoute() {
 
       mapRef.current?.animateToRegion(nextRegion, 350);
     },
-    [region.latitudeDelta, region.longitudeDelta],
+    [region.latitudeDelta, region.longitudeDelta, sheetContent, stationById],
   );
 
   const showCluster = useCallback(
@@ -202,8 +279,7 @@ export default function MapRoute() {
         return;
       }
 
-      setSelectedClusterId(clusterId);
-      setSelectedStationId(undefined);
+      setSelection((current) => ({ key: (current?.key ?? 0) + 1, kind: 'cluster', ids: stations.map((station) => station.id) }));
       setSheetContent({ kind: 'cluster', stations });
       setSheetVisible(true);
 
@@ -231,13 +307,14 @@ export default function MapRoute() {
 
   const clearHiddenSheet = useCallback(() => {
     setSheetContent(undefined);
-    setSelectedClusterId(undefined);
-    setSelectedStationId(undefined);
+    setSelection(undefined);
   }, []);
 
   const openDirections = useCallback(
     async (station: MapStation) => {
-      if (!station.coordinateVerified) {
+      if (!sheetVisible || !hasMapCoordinate(station.coordinate) ||
+        !(sheetContent?.kind === 'station'
+          ? sheetContent.station === station : sheetContent?.stations.includes(station))) {
         return;
       }
 
@@ -289,7 +366,7 @@ export default function MapRoute() {
         }
       }
     },
-    [showTmapOpenFailedAlert, showAuthErrorAlert],
+    [sheetContent, sheetVisible, showTmapOpenFailedAlert, showAuthErrorAlert],
   );
 
   const handleMapLayout = useCallback((event: LayoutChangeEvent) => {
@@ -344,9 +421,10 @@ export default function MapRoute() {
           </View>
         ) : null}
 
-        {sheetContent && mapHeight > 0 ? (
+        {sheetContent && selection && mapHeight > 0 ? (
           <StationSheet
             content={sheetContent}
+            selectionKey={selection.key}
             height={mapHeight}
             onDirections={openDirections}
             onHidden={clearHiddenSheet}
@@ -366,16 +444,9 @@ function isClusterFeature(
   return 'cluster' in feature.properties && feature.properties.cluster === true;
 }
 
-function getBoundingBox(region: MapRegion): [number, number, number, number] {
-  const halfLatitude = region.latitudeDelta / 2;
-  const halfLongitude = region.longitudeDelta / 2;
-
-  return [
-    region.longitude - halfLongitude,
-    region.latitude - halfLatitude,
-    region.longitude + halfLongitude,
-    region.latitude + halfLatitude,
-  ];
+function isSessionError(error: unknown) {
+  return error instanceof AuthApiError &&
+    ((error.status === 401 && error.code === 'INVALID_SESSION') || error.code === 'SESSION_CLEAR_FAILED');
 }
 
 function getZoom(region: MapRegion) {
