@@ -15,6 +15,41 @@ const id = '11111111-1111-4111-8111-111111111111';
 const item = { id, status: 'pending', submittedAt: '2026-09-22T00:00:00.000Z', decidedAt: null, mileageAmount: null, finalAmount: null, rejectionReason: null };
 const detail = { ...item, photos: { receipt: `/api/v1/mileage/applications/${id}/photos/receipt`, meter: `/api/v1/mileage/applications/${id}/photos/meter` } };
 
+test('summary uses the existing JSON contract and cookie or Bearer credentials, including a real zero', async () => {
+  assert.equal(typeof api.getMileageSummary, 'function');
+  process.env.EXPO_PUBLIC_API_URL = 'http://localhost:8080';
+  for (const session of [{ token: 'test' }, { credentials: 'include' }]) {
+    for (const accumulatedMileage of [0, 74910, Number.MAX_SAFE_INTEGER]) {
+      globalThis.fetch = async (url, options) => {
+        assert.equal(url, 'http://localhost:8080/api/v1/mileage/summary');
+        assert.equal(options.method, 'GET');
+        assert.equal(options.headers.Authorization, session.token ? 'Bearer test' : undefined);
+        assert.equal(options.credentials, session.credentials ?? 'omit');
+        return Response.json({ accumulatedMileage });
+      };
+      assert.deepEqual(await api.getMileageSummary(session), { accumulatedMileage });
+    }
+  }
+});
+
+test('summary rejects invalid amounts and preserves API or network errors', async () => {
+  assert.equal(typeof api.getMileageSummary, 'function');
+  process.env.EXPO_PUBLIC_API_URL = 'http://localhost:8080';
+  for (const invalid of [null, [], {}, { accumulatedMileage: null }, { accumulatedMileage: '0' },
+    { accumulatedMileage: -1 }, { accumulatedMileage: 0.5 }, { accumulatedMileage: Number.MAX_SAFE_INTEGER + 1 }]) {
+    globalThis.fetch = async () => Response.json(invalid);
+    await assert.rejects(api.getMileageSummary({}), { code: 'INVALID_RESPONSE' });
+  }
+  globalThis.fetch = async () => Response.json({ accumulatedMileage: 1 }, { status: 201 });
+  await assert.rejects(api.getMileageSummary({}), { code: 'INVALID_RESPONSE' });
+  for (const [status, code] of [[401, 'INVALID_SESSION'], [500, 'INTERNAL_SERVER_ERROR']]) {
+    globalThis.fetch = async () => Response.json({ code, message: '조회 실패' }, { status });
+    await assert.rejects(api.getMileageSummary({}), { status, code });
+  }
+  globalThis.fetch = async () => { throw new Error('offline'); };
+  await assert.rejects(api.getMileageSummary({}), { code: 'NETWORK_ERROR' });
+});
+
 test('calendar ranges include the selected last local day, clamp month ends and reject invalid dates', () => {
   const filter = { period: 'oneMonth', sort: 'latest', startDate: '', endDate: '' };
   const range = api.mileageQuery(filter, new Date(2026, 2, 31, 15));

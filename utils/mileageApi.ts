@@ -1,4 +1,4 @@
-import { AuthApiError, getApiUrl, type SessionOptions } from './authApi';
+import { AuthApiError, getApiUrl, request as requestJson, type SessionOptions } from './authApi';
 
 export type MileageApplication = {
   id: string;
@@ -124,6 +124,13 @@ async function mileageRequest(path: string, session: SessionOptions, options: {
     clearTimeout(timeout);
     options.signal?.removeEventListener('abort', abort);
   }
+}
+
+export async function getMileageSummary(session: SessionOptions): Promise<{ accumulatedMileage: number }> {
+  const data = record(await requestJson('/mileage/summary', { ...session, expectedStatus: 200 }));
+  const value = data.accumulatedMileage;
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) return invalidResponse();
+  return { accumulatedMileage: value };
 }
 
 export async function getMileageApplications(query: MileageQuery, session: SessionOptions, signal?: AbortSignal) {

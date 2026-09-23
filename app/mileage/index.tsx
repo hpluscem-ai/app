@@ -22,7 +22,7 @@ import { AppScreen } from '../../components/AppScreen';
 import { useAuth } from '../../components/AuthProvider';
 import { NoticeModal } from '../../components/NoticeModal';
 import { AuthApiError, getAuthErrorMessage } from '../../utils/authApi';
-import { getMileageApplications, mileageQuery, type MileageFilter, type MileageQuery } from '../../utils/mileageApi';
+import { getMileageApplications, getMileageSummary, mileageQuery, type MileageFilter, type MileageQuery } from '../../utils/mileageApi';
 import { MileageWaterJugIcon } from '../../components/icons/MileageWaterJugIcon';
 import { colors, typography, webAppFrame } from '../../constants/theme';
 
@@ -106,11 +106,35 @@ function getInitialCustomRange() {
 export default function MileageRoute() {
   const router = useRouter();
   const { state, request } = useAuth();
+  const userId = state.user?.id;
   const [filter, setFilter] = useState<MileageFilter>(() => ({ period: 'threeMonths', sort: 'latest', ...getInitialCustomRange() }));
   const [items, setItems] = useState<MileageHistoryItem[] | undefined>();
-  const [notice, setNotice] = useState<{ message: string; retry?: () => void } | null>(null);
+  type Notice = { message: string; retry?: () => void };
+  const [notice, setNotice] = useState<Notice | null>(null);
+  const [summary, setSummary] = useState<{ userId: string; balance?: number; notice?: Notice } | null>(null);
   type Listing = { controller: AbortController; query: MileageQuery; cursor: string | null; busy: boolean; failed: boolean };
   const listing = useRef<Listing | null>(null);
+
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    let busy = false;
+    setSummary(null);
+    const load = async () => {
+      if (!active || busy || !userId) return;
+      busy = true;
+      setSummary(null);
+      try {
+        const data = await request(session => getMileageSummary(session));
+        if (active) setSummary({ userId, balance: data.accumulatedMileage });
+      } catch (error) {
+        if (active) setSummary({ userId, notice: { message: getAuthErrorMessage(error), retry: () => { void load(); } } });
+      } finally {
+        busy = false;
+      }
+    };
+    void load();
+    return () => { active = false; setSummary(null); };
+  }, [request, userId]));
 
   const loadPage = useCallback(async (scope: Listing, append: boolean) => {
     if (listing.current !== scope || scope.controller.signal.aborted || scope.busy || (append && !scope.cursor)) return;
@@ -145,6 +169,14 @@ export default function MileageRoute() {
     return () => { scope.controller.abort(); listing.current = null; setNotice(null); setItems(undefined); };
   }, [filter, state.user?.id, loadPage]));
 
+  const currentSummary = summary?.userId === userId ? summary : null;
+  // Keep both retries when history and summary fail at the same time.
+  const visibleNotice = notice ?? currentSummary?.notice;
+  const closeNotice = () => {
+    if (notice) setNotice(current => current === notice ? null : current);
+    else setSummary(current => current === currentSummary ? null : current);
+  };
+
   return (
     <>
       <AppScreen activeTab="mileage" showFooter={false} variant="main" onEndReached={() => {
@@ -153,7 +185,7 @@ export default function MileageRoute() {
       }}>
         <MileageHero userName={state.user?.name} onApply={() => router.push('/mileage/apply')} />
         <View style={styles.content}>
-          <MileageBalanceCard />
+          <MileageBalanceCard balance={currentSummary?.balance} />
           <MileageHistory items={items} appliedFilter={filter}
             onQueryChange={next => {
               try { mileageQuery(next); setFilter(next); return true; }
@@ -162,10 +194,10 @@ export default function MileageRoute() {
             onOpenStatus={(status, id) => router.push({ pathname: '/mileage/[status]', params: { status, id } })} />
         </View>
       </AppScreen>
-      <NoticeModal accessibilityLabel="마일리지 조회 안내" confirmLabel={notice?.retry ? '다시 시도' : '확인'}
-        message={notice?.message ?? ''} visible={notice !== null}
-        onRequestClose={() => setNotice(null)}
-        onConfirm={() => { const retry = notice?.retry; setNotice(null); retry?.(); }} />
+      <NoticeModal accessibilityLabel="마일리지 조회 안내" confirmLabel={visibleNotice?.retry ? '다시 시도' : '확인'}
+        message={visibleNotice?.message ?? ''} visible={visibleNotice != null}
+        onRequestClose={closeNotice}
+        onConfirm={() => { closeNotice(); visibleNotice?.retry?.(); }} />
     </>
   );
 }
@@ -226,7 +258,7 @@ function MileageBalanceCard({ balance }: { balance?: number }) {
 
   return (
     <View
-      accessibilityLabel={balance === undefined ? '누적 마일리지 서버 연동 대기' : `누적 마일리지 ${balanceLabel}마일`}
+      accessibilityLabel={balance === undefined ? '누적 마일리지 미조회' : `누적 마일리지 ${balanceLabel}마일`}
       accessible
       style={styles.balanceCard}
     >
