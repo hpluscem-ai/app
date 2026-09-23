@@ -10,7 +10,7 @@ const documents = {
   user: await readFile(new URL('../docs/user-auth-qa.md', import.meta.url), 'utf8'),
   admin: await readFile(new URL('../docs/admin-qa.md', import.meta.url), 'utf8'),
 };
-const counts = { user: 248, admin: 169 };
+const counts = { user: 248, admin: 224 };
 const pages = Object.fromEntries(Object.entries(documents).map(([audience, markdown]) => [audience, renderQa(markdown, audience)]));
 
 test('Both checklists render all cases in order, cover all pages, and exclude connection outage cases', () => {
