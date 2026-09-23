@@ -856,3 +856,16 @@
 - 실행 명령: 서버 `pnpm exec jest --watchman=false --config test/jest-e2e.json --runInBand --runTestsByPath test/mileage.e2e-spec.ts test/admin-mileage.e2e-spec.ts`; DB·OCR worker·사진 저장소 관련 5개 spec의 Jest; `pnpm exec tsc --noEmit`; 변경 TS 파일 ESLint. 앱 `node --experimental-strip-types --test tests/mileage.test.mjs tests/mileageApi.test.mjs tests/authApi.test.mjs tests/authSession.test.mjs`; `pnpm typecheck`. 양 저장소 `git diff --check`.
 - 최종 결과: 서버 HTTP/API 회귀 57개 + DB/OCR worker/사진 저장소 47개, 앱·인증 회귀 39개로 총 143개 통과. 서버·앱 타입 검사, 서버 변경 파일 ESLint, 양 저장소 diff 공백 검사 통과. 실패 경로를 의도적으로 주입한 테스트의 서버 오류 로그는 해당 성공 검증에 포함된다.
 - 실제 사용자 DB·R2·유료 OCR은 호출하지 않았다. 마이그레이션은 메모리/임시 DB에서 이전 기록 보존·실패 롤백을 확인했다. 실제 저장소·실기기 확인, QA 캠페인, 사용자 DB 적용, 출시 준비·배포는 수행하지 않았다. 기존 다른 작업자의 변경은 보존했다. 새 브랜치는 만들지 않았고 이전 잔액 연결만 `e58ef8c`로 커밋했으며 이번 재등록 변경은 미커밋 상태다.
+
+## 2026-09-24 관리자 마일리지 반려 및 심사 UI 연결 — 승인 정책 확인 중
+
+- 사용자 요청으로 이전 재등록 작업을 서버 `5aab8f9`와 앱 `94eb1aa`로 선택 커밋했다. 다른 작업자의 기존 변경은 보존했다.
+- 새 반려 계약은 `POST /api/v1/admin/mileage/applications/:id/reject { reviewVersion }`다. 사유 입력은 허용하지 않으며 새 반려에만 null을 기록한다. 같은 버전의 재전송은 기존 반려 결과·시각·과거 사유를 반환한다. 기존 관리자 권한·쿠키 Origin·정산 미편입·버전·원자적 갱신 검사를 유지했다.
+- 저장된 현재 제출의 OCR 근거를 reviewVersion에 포함해 금액은 같아도 리터가 바뀌면 이전 심사를 차단한다. 판독 대기 중 반려된 신청에는 늦은 OCR 결과를 적용하지 않으며 동일 반려 재전송 결과도 유지한다. OCR 공급자·판독 로직과 DB 스키마는 수정하지 않았다.
+- 사용자가 한 장의 와이어프레임을 명시 승인했다. 어드민 기존 승인여부 칸의 대기·정산 미편입 행에 승인/반려 버튼과 기존 ConfirmationDialog를 연결했다. 기존 API 요청 함수를 재사용하고 성공 응답만 반영한다. 오류 재시도·409/404 재조회·중복 클릭·화면 이탈·검색 변경·오래된 팝업 콜백을 처리한다. 새 페이지·스타일·사유 입력은 추가하지 않았다.
+- 주유량은 사용자 결정에 따라 계기판 ‘리터’만 사용하고 영수증 수량은 비교하지 않는다. 금액 불일치와 수동 보정 정책 답변을 기다리고 있다. 승인 버튼의 클라이언트 요청 연결까지 작성했으나 서버 approve API와 정확한 적립 계산은 아직 미구현이며 승인 기능 완료로 간주하지 않는다.
+- 변경 파일: 서버 `src/admin-mileage/admin-mileage.dto.ts`, `admin-mileage.controller.ts`, `admin-mileage.service.ts`, `src/mileage/index.ts`, `test/admin-mileage.e2e-spec.ts`, `test/mileage.e2e-spec.ts`, `test/settlements.e2e-spec.ts`; 어드민 `src/receipts.ts`, `src/pages/ReceiptDataPage.tsx`, `tests/receipts.test.mjs`; 앱은 이 개발 기록과 AGENTS 정책 기록만 추가했다.
+- 실행 결과: 서버 메모리 DB의 관리자 심사·재등록·정산 HTTP 검사 130개, 어드민 receipts 검사 12개 통과. 서버 `tsc --noEmit --incremental false`, 변경 파일 ESLint; 어드민 `tsc -b --pretty false`, 변경 구현 파일 Oxlint 통과. 서버 실패 롤백 검사의 의도적인 오류 로그는 해당 통과 결과에 포함된다. 어드민 검사는 요청/응답 대역 검사이며 실브라우저 통합 검증으로 주장하지 않는다.
+- AI는 구현·직접 검토·격리 자동 검사를 수행했고 사용자는 UI 배치와 계기판 주유량 기준을 결정했다. 이 보조 대화에서는 별도 에이전트를 사용하지 않았다. 실제 사용자 DB·유료 외부 호출·별도 QA 캠페인·새 브랜치·이번 변경 커밋·배포는 수행하지 않았다.
+
+- 후속 커밋 요청: 서버 `96b9904`, 어드민 `774d55a`에 위 완료 범위를 커밋했다. 승인 API 미완료 상태를 커밋 본문에 명시했다.
