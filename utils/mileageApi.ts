@@ -10,6 +10,7 @@ export type MileageApplication = {
   rejectionReason: string | null;
 };
 export type MileageDetail = MileageApplication & {
+  submissionVersion: string;
   photos: { receipt: string | null; meter: string | null };
 };
 export type MileageFilter = {
@@ -26,6 +27,7 @@ export type MileageQuery = {
 };
 export type MileageUpload = { uri: string; name: string; type: string; file?: Blob };
 export type MileageSubmission = { key: string; receipt: MileageUpload; meter: MileageUpload };
+export type MileageResubmission = { key: string; submissionVersion: string; receipt?: MileageUpload; meter?: MileageUpload };
 
 export function formatMileageDate(date: Date): string {
   return `${date.getFullYear()}. ${String(date.getMonth() + 1).padStart(2, '0')}. ${String(date.getDate()).padStart(2, '0')}`;
@@ -82,16 +84,18 @@ function application(value: unknown): MileageApplication {
 function detail(value: unknown, id?: string): MileageDetail {
   const data = application(value);
   if (id && data.id !== id) return invalidResponse();
+  const version = record(value).submissionVersion;
+  if (typeof version !== 'string' || !/^[0-9a-f]{64}$/.test(version)) return invalidResponse();
   const photos = record(record(value).photos);
   for (const kind of ['receipt', 'meter'] as const) {
     if (photos[kind] !== null && photos[kind] !== `/api/v1/mileage/applications/${data.id}/photos/${kind}`) return invalidResponse();
   }
-  return { ...data, photos: photos as MileageDetail['photos'] };
+  return { ...data, submissionVersion: version, photos: photos as MileageDetail['photos'] };
 }
 
 // Multipart and protected image bodies need a different transport from the JSON-only auth API.
 async function mileageRequest(path: string, session: SessionOptions, options: {
-  body?: FormData; signal?: AbortSignal; photo?: boolean;
+  body?: FormData; signal?: AbortSignal; photo?: boolean; expectedStatus?: 200 | 201;
 } = {}): Promise<unknown> {
   const controller = new AbortController();
   const abort = () => controller.abort();
@@ -109,7 +113,7 @@ async function mileageRequest(path: string, session: SessionOptions, options: {
       const error = data && typeof data === 'object' ? data as Record<string, unknown> : {};
       throw new AuthApiError(typeof error.message === 'string' ? error.message : '서버 요청에 실패했습니다. 다시 시도해주세요.', typeof error.code === 'string' ? error.code : '', response.status);
     }
-    if (response.status !== (options.body ? 201 : 200)) return invalidResponse();
+    if (response.status !== (options.expectedStatus ?? (options.body ? 201 : 200))) return invalidResponse();
     if (!options.photo) return await response.json().catch(invalidResponse);
     if (response.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'image/jpeg') return invalidResponse();
     const blob = await response.blob();
@@ -146,16 +150,30 @@ export async function getMileageApplication(id: string, session: SessionOptions,
   return detail(await mileageRequest(`/${applicationId(id)}`, session, { signal }), id);
 }
 
-export async function createMileageApplication(input: MileageSubmission, session: SessionOptions, signal?: AbortSignal): Promise<MileageDetail> {
+function submissionBody(input: { key: string; receipt?: MileageUpload; meter?: MileageUpload }): FormData {
   const body = new FormData();
   body.append('idempotencyKey', applicationId(input.key));
   for (const kind of ['receipt', 'meter'] as const) {
     const photo = input[kind];
+    if (!photo) continue;
     if (photo.file) body.append(kind, photo.file, photo.name);
     // React Native FormData accepts a local URI descriptor instead of a web Blob.
     else body.append(kind, { uri: photo.uri, name: photo.name, type: photo.type } as unknown as Blob);
   }
-  return detail(await mileageRequest('', session, { body, signal }));
+  return body;
+}
+
+export async function createMileageApplication(input: MileageSubmission, session: SessionOptions, signal?: AbortSignal): Promise<MileageDetail> {
+  return detail(await mileageRequest('', session, { body: submissionBody(input), signal }));
+}
+
+export async function resubmitMileageApplication(id: string, input: MileageResubmission, session: SessionOptions, signal?: AbortSignal): Promise<MileageDetail> {
+  applicationId(id);
+  if (!input.receipt && !input.meter) throw new AuthApiError('교체할 사진을 한 장 이상 선택해주세요.', 'PHOTO_REQUIRED');
+  if (!/^[0-9a-f]{64}$/.test(input.submissionVersion)) throw new AuthApiError('신청 내역을 다시 조회해주세요.', 'INVALID_SUBMISSION_VERSION');
+  const body = submissionBody(input);
+  body.append('submissionVersion', input.submissionVersion);
+  return detail(await mileageRequest(`/${id}/resubmit`, session, { body, signal, expectedStatus: 200 }), id);
 }
 
 export async function getMileagePhoto(id: string, kind: 'receipt' | 'meter', session: SessionOptions, signal?: AbortSignal): Promise<Blob> {

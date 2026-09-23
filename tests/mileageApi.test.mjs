@@ -13,7 +13,7 @@ const originalEnv = { ...process.env };
 afterEach(() => { globalThis.fetch = originalFetch; process.env = { ...originalEnv }; });
 const id = '11111111-1111-4111-8111-111111111111';
 const item = { id, status: 'pending', submittedAt: '2026-09-22T00:00:00.000Z', decidedAt: null, mileageAmount: null, finalAmount: null, rejectionReason: null };
-const detail = { ...item, photos: { receipt: `/api/v1/mileage/applications/${id}/photos/receipt`, meter: `/api/v1/mileage/applications/${id}/photos/meter` } };
+const detail = { ...item, submissionVersion: 'a'.repeat(64), photos: { receipt: `/api/v1/mileage/applications/${id}/photos/receipt`, meter: `/api/v1/mileage/applications/${id}/photos/meter` } };
 
 test('summary uses the existing JSON contract and cookie or Bearer credentials, including a real zero', async () => {
   assert.equal(typeof api.getMileageSummary, 'function');
@@ -122,4 +122,33 @@ test('protected photos only use fixed own-API paths, distinguish HTTP failures a
   await assert.rejects(api.getMileagePhoto(id, 'receipt', {}), { code: 'INVALID_RESPONSE' });
   globalThis.fetch = async () => assert.fail('bad IDs must never reach fetch');
   await assert.rejects(api.getMileagePhoto('https://external.test', 'receipt', {}), { code: 'INVALID_APPLICATION_ID' });
+});
+
+
+test('resubmission sends only selected photos with a separate key/version and expects HTTP 200', async () => {
+  process.env.EXPO_PUBLIC_API_URL = 'http://localhost:8080';
+  const input = { key: id, submissionVersion: detail.submissionVersion, meter: { file: new Blob(['replacement']), name: 'meter.jpg' } };
+  for (const session of [{ token: 'test' }, { credentials: 'include' }]) {
+    globalThis.fetch = async (url, options) => {
+      assert.equal(url, `http://localhost:8080/api/v1/mileage/applications/${id}/resubmit`);
+      assert.equal(options.body.get('idempotencyKey'), id);
+      assert.equal(options.body.get('submissionVersion'), detail.submissionVersion);
+      assert.equal(options.body.has('receipt'), false);
+      assert.equal(await options.body.get('meter').text(), 'replacement');
+      assert.equal(options.headers['Content-Type'], undefined);
+      assert.equal(options.headers.Authorization, session.token ? 'Bearer test' : undefined);
+      assert.equal(options.credentials, session.credentials ?? 'omit');
+      return Response.json(detail);
+    };
+    assert.deepEqual(await api.resubmitMileageApplication(id, input, session), detail);
+  }
+  globalThis.fetch = async () => Response.json(detail, { status: 201 });
+  await assert.rejects(api.resubmitMileageApplication(id, input, {}), { code: 'INVALID_RESPONSE' });
+  for (const submissionVersion of [undefined, '', 'A'.repeat(64), 'a'.repeat(63)]) {
+    globalThis.fetch = async () => Response.json({ ...detail, submissionVersion });
+    await assert.rejects(api.getMileageApplication(id, {}), { code: 'INVALID_RESPONSE' });
+  }
+  globalThis.fetch = async () => assert.fail('invalid submissions cannot be sent');
+  await assert.rejects(api.resubmitMileageApplication(id, { ...input, meter: undefined }, {}), { code: 'PHOTO_REQUIRED' });
+  await assert.rejects(api.resubmitMileageApplication(id, { ...input, submissionVersion: '' }, {}), { code: 'INVALID_SUBMISSION_VERSION' });
 });

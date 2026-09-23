@@ -822,3 +822,37 @@
 - 검증: 먼저 추가한 6개 테스트가 요약 함수/화면 연결 부재로 실패함을 확인한 뒤 구현했다. `node --experimental-strip-types --test tests/mileageApi.test.mjs tests/mileage.test.mjs tests/authApi.test.mjs tests/authSession.test.mjs` 34개와 `pnpm typecheck`, `git diff --check`가 통과했다. 0·양수·잘못된 값·HTTP 오류·인증 전달, 필터/페이지 독립, 동시 오류 재시도, blur/계정 전환/unmount 뒤 늦은 성공·실패를 검사했다. Node의 기존 experimental/type module 경고는 남아 있으며 이를 없애기 위한 패키지 설정 변경은 하지 않았다.
 - 작업/검토 구분: AI가 기존 서버 계약 대조·구현·자동 검사·변경 diff 검토를 수행했고 사용자가 지급일 배지 유지 여부를 결정했다. 보조 대화의 서브에이전트 금지에 따라 별도 검토 에이전트는 실행하지 않고 동일 실행자가 자체 검토했다. 검사에서는 HTTP/네이티브 런타임을 대체했으며 실제 서버·사용자 DB·브라우저·실기기 검증, 별도 QA 캠페인, 배포는 수행하지 않았다.
 - 리뷰 순서: `utils/mileageApi.ts`(요약 계약/검증) → `app/mileage/index.tsx`(화면 수명/잔액/알림) → `tests/mileageApi.test.mjs`, `tests/mileage.test.mjs`(계약·수명 회귀) → `AGENTS.md`, 이 기록(최신 결정과 검증 범위). 기존 사용자 변경을 보존했으며 브랜치·커밋·새 라이브러리·새 계획 문서를 만들지 않았다.
+
+## 2026-09-24 — 반려 마일리지 재등록 API·기존 화면 연결
+
+### 확정 정책과 API
+
+- 사용자 결정: 최초 `submittedAt` 유지, 동일 이미지 파일 재선택 허용. 같은 신청 ID로 처리하고 기존 `MileagePhotoForm`의 선택한 사진 한 장 또는 두 장만 전송한다. 선택하지 않은 기존 사진은 DB 식별자와 저장 객체를 유지한다. 반려 사유 입력은 없으며 기존 사유 표시는 유지했다. 새 시각 요소·페이지·폼은 추가하지 않았다.
+- `POST /api/v1/mileage/applications/:id/resubmit`: 기존 기사 Bearer/쿠키 인증, multipart `idempotencyKey: UUID v4`, `submissionVersion: 64자리 소문자 16진수`, `receipt?`, `meter?`(최소 한 장). 성공 HTTP 200과 같은 ID의 최신 상세를 반환한다. 기존 상세·신규 신청 응답에 저장 경로를 노출하지 않는 `submissionVersion`을 추가하고 기존 OCR 사진 버전 계산을 재사용했다.
+- 오류: 입력 400, 인증 401, 쿠키 Origin 403, 타인/없음/정산 완료 404, 상태·제출 버전 변경 `409 MILEAGE_RESUBMISSION_CONFLICT`, 같은 키의 다른 버전/선택 종류/원본 바이트 `409 IDEMPOTENCY_CONFLICT`. 기존 사진 413/415, 일시 장애 503, DB 장애 500 구분을 유지한다.
+- 완료한 재등록 키는 별도 이력에 보관한다. 원신청 `idempotencyKey/requestHash`는 수정하지 않는다. 동일 재전송 및 과거 완료 요청은 추가 업로드·OCR 등록·상태 복원 없이 현재 상세를 반환한다. 두 요청이 겹치면 트랜잭션에서 한 번만 반영하고 실패 요청 자신의 새 객체만 정리한다.
+- 사진 메타데이터 교체·과거 반려 사유/결정 시각 보존·현재 OCR/심사 금액과 상태 초기화·pending 전환·기존 설정에 따른 OCR 작업 등록·업로드 시도 완료 처리를 즉시 쓰기 트랜잭션으로 묶었다. 원격 업로드 자체는 DB 트랜잭션 밖에서 진행하고 기존 시도 기록으로 실패를 정리한다. 이전 사진과 커밋된 원격 객체는 삭제하지 않는다.
+- 변경된 사진 ID와 고유 저장 키로 이전 OCR 및 관리자 `reviewVersion` 적용을 막는다. 중복 비교에서도 보존한 원신청 해시와 과거 제출의 OCR 결과를 현재 사진 증거로 사용하지 않도록 버전 연결만 맞췄다. OCR 공급자·판독 함수·요금 제한·자동 승인 정책은 변경하지 않았다.
+
+### 앱 수명·재시도
+
+- React Native의 기존 사진 준비/캐시 복사와 웹 Blob 전송을 재사용했다. 재등록 준비 경로는 선택한 사진만 처리한다. 원본 picker URI와 기존 보호 사진은 새 업로드 임시 파일 정리의 대상이 아니다.
+- 기존 `useAuth().request`를 통해 요청하고, 실패 후 같은 준비 파일·키로 재시도한다. 사진을 재선택하면 실패한 준비 파일을 폐기하고 새 키를 발급한다. 중복 클릭은 화면 내부 ref로 막고 화면 이탈·계정 변경 시 요청을 중단하며 늦은 결과와 오래된 알림 콜백을 무시한다. 계정 변경 첫 렌더에서도 이전 사진과 알림을 표시하지 않는다.
+- 기존 NoticeModal로 실패·성공을 안내한다. 409는 현재 상세와 사진을 재조회하고, 성공 확인 후 적립 내역으로 돌아간다. 웹 DOM 수명 대신 Expo Router 포커스 수명을 기준으로 임시 파일과 보호 이미지 미리보기를 정리한다.
+
+### 변경 파일과 리뷰 순서
+
+1. 서버 원자성·경합: `src/mileage/mileage.repository.ts`, `src/mileage/mileage.service.ts`.
+2. DB v10: `src/database/010-mileage-resubmissions.sql`, `src/database/database.service.ts`, `src/database/schema.ts`. 재등록 이력과 키 유일성, 한 장 업로드의 두 저장 키/두 장의 네 키를 지원한다. 과거 006 마이그레이션은 유지했다.
+3. 계약·업로드: `src/mileage/mileage.controller.ts`, `src/mileage/mileage.dto.ts`, `src/mileage/mileage-upload.interceptor.ts`, `src/mileage/photo-processor.service.ts`.
+4. 앱 연결: `utils/mileageApi.ts`, `utils/mileagePhotos.ts`, `app/mileage/[status].tsx`.
+5. 서버 검사: `test/mileage.e2e-spec.ts`, `src/mileage/mileage-ocr-worker.service.spec.ts`, `src/database/database.service.spec.ts`, `src/database/station-address-migration.spec.ts`, `src/settlements/settlement-migration.spec.ts`. 기존 마이그레이션 검사 두 곳의 최신 버전 기대값도 v10으로 맞췄다.
+6. 앱 검사·기록: `tests/mileage.test.mjs`, `tests/mileageApi.test.mjs`, `AGENTS.md`, 이 문서.
+
+### 검증과 범위
+
+- AI 작업: 서버·앱 연결 구현, 격리 자동 검사, 권한·원격 객체 보존·멱등성·이전 OCR/관리자 요청에 대한 직접 코드 검토. 이 보조 대화에서는 서브에이전트 사용이 금지되어 별도 검토자를 실행하지 않았다.
+- 사용자 결정: 최초 신청일 유지 및 같은 파일 재선택 허용. 실제 사용자 DB 적용은 개발 종료 이후로 보류했다.
+- 실행 명령: 서버 `pnpm exec jest --watchman=false --config test/jest-e2e.json --runInBand --runTestsByPath test/mileage.e2e-spec.ts test/admin-mileage.e2e-spec.ts`; DB·OCR worker·사진 저장소 관련 5개 spec의 Jest; `pnpm exec tsc --noEmit`; 변경 TS 파일 ESLint. 앱 `node --experimental-strip-types --test tests/mileage.test.mjs tests/mileageApi.test.mjs tests/authApi.test.mjs tests/authSession.test.mjs`; `pnpm typecheck`. 양 저장소 `git diff --check`.
+- 최종 결과: 서버 HTTP/API 회귀 57개 + DB/OCR worker/사진 저장소 47개, 앱·인증 회귀 39개로 총 143개 통과. 서버·앱 타입 검사, 서버 변경 파일 ESLint, 양 저장소 diff 공백 검사 통과. 실패 경로를 의도적으로 주입한 테스트의 서버 오류 로그는 해당 성공 검증에 포함된다.
+- 실제 사용자 DB·R2·유료 OCR은 호출하지 않았다. 마이그레이션은 메모리/임시 DB에서 이전 기록 보존·실패 롤백을 확인했다. 실제 저장소·실기기 확인, QA 캠페인, 사용자 DB 적용, 출시 준비·배포는 수행하지 않았다. 기존 다른 작업자의 변경은 보존했다. 새 브랜치는 만들지 않았고 이전 잔액 연결만 `e58ef8c`로 커밋했으며 이번 재등록 변경은 미커밋 상태다.

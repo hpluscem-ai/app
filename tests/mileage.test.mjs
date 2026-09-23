@@ -40,10 +40,9 @@ function mount(path, extras = {}, params = {}, renderHistory = false) {
     '../../components/mileage/MileagePhotoForm': { MileagePhotoForm: 'MileagePhotoForm' },
     '../../components/mileage/UploadCard': { UploadCard: 'UploadCard' },
     '../../components/icons/MileageWaterJugIcon': { MileageWaterJugIcon: 'WaterJug' },
-    '../../utils/alerts': { useAlerts: () => ({ showMileageReRegistrationServerPendingAlert: () => navigation.push('resubmit-pending') }) },
     '../../utils/authApi': authApi,
-    '../../utils/mileageApi': { ...api, getMileageSummary: session => pending(summaries, { session }), createMileageApplication: (input, session, signal) => pending(calls, { input, session, signal }), getMileageApplications: (query, session, signal) => pending(calls, { query, session, signal }), getMileageApplication: (id, session, signal) => pending(details, { id, session, signal }), getMileagePhoto: (id, kind, session, signal) => pending(photos, { id, kind, signal }) },
-    '../../utils/mileagePhotos': { prepareMileageSubmission: selection => pending(preparations, { selection }), mileagePhotoPreview: async blob => blob },
+    '../../utils/mileageApi': { ...api, resubmitMileageApplication: (id, input, session, signal) => pending(calls, { id, input, session, signal }), getMileageSummary: session => pending(summaries, { session }), createMileageApplication: (input, session, signal) => pending(calls, { input, session, signal }), getMileageApplications: (query, session, signal) => pending(calls, { query, session, signal }), getMileageApplication: (id, session, signal) => pending(details, { id, session, signal }), getMileagePhoto: (id, kind, session, signal) => pending(photos, { id, kind, signal }) },
+    '../../utils/mileagePhotos': { prepareMileageResubmission: (selection, submissionVersion) => pending(preparations, { selection, submissionVersion }), prepareMileageSubmission: selection => pending(preparations, { selection }), mileagePhotoPreview: async blob => blob },
     ...extras,
   };
   const route = load(path, imports).default;
@@ -248,8 +247,92 @@ test('detail uses server status, protects photos and revokes previews on leaving
   assert.equal(page.get('MileagePhotoForm').intro, '실제 반려 사유');
   assert.equal(page.get('MileagePhotoForm').existingImages.dashboard.uri, 'blob:meter');
   assert.match(page.get('Stack.Screen').options.title, /반려$/);
-  page.get('MileagePhotoForm').onValidSubmit(); assert.deepEqual(page.navigation, ['resubmit-pending']);
+  assert.equal(page.get('MileagePhotoForm').locked, false);
   page.blur(); assert.equal(disposed, 2); page.unmount();
+});
+
+async function rejectedPage() {
+  const page = mount('../app/mileage/[status].tsx', {}, { id, status: 'rejected' });
+  page.details[0].resolve({ ...item(id, 'rejected'), submissionVersion: 'a'.repeat(64), photos: { receipt: 'path', meter: 'path' } }); await page.flush();
+  for (let i = 0; i < 2; i++) { page.photos[i].resolve({ uri: `blob:${i}`, dispose() {} }); await page.flush(); }
+  return page;
+}
+
+test('rejected detail submits selected photos once and preserves key/bytes for retry', async () => {
+  const page = await rejectedPage();
+  const selection = { receipt: null, dashboard: { uri: 'replacement' } };
+  let disposed = 0;
+  const input = { key: 'new-key', submissionVersion: 'a'.repeat(64), meter: { uri: 'prepared' }, dispose: () => disposed++ };
+  const first = page.get('MileagePhotoForm').onValidSubmit(selection);
+  void page.get('MileagePhotoForm').onValidSubmit(selection);
+  assert.equal(page.preparations.length, 1);
+  assert.equal(page.preparations[0].selection, selection);
+  assert.equal(page.preparations[0].submissionVersion, input.submissionVersion);
+  page.preparations[0].resolve(input); await page.flush();
+  page.calls[0].reject(new authApi.AuthApiError('연결 실패', 'NETWORK_ERROR')); await first; await page.flush();
+  assert.equal(disposed, 0); assert.equal(page.get('NoticeModal').message, '연결 실패');
+  page.get('NoticeModal').onConfirm();
+  const second = page.get('MileagePhotoForm').onValidSubmit(selection); await page.flush();
+  assert.equal(page.preparations.length, 1);
+  assert.equal(page.calls[1].input, input); assert.equal(page.calls[1].id, id);
+  page.calls[1].resolve({ ...item(id), submissionVersion: 'b'.repeat(64) }); await second; await page.flush();
+  assert.equal(disposed, 1); assert.equal(page.get('MileagePhotoForm').locked, true);
+  assert.deepEqual(page.navigation, []);
+  const confirm = page.get('NoticeModal').onConfirm;
+  confirm(); confirm(); assert.deepEqual(page.navigation, ['/mileage']);
+  page.unmount();
+});
+
+test('resubmission ignores preparation and request completion after blur or account changes', async () => {
+  for (const stage of ['preparation', 'request']) for (const leave of ['blur', 'account']) {
+    const page = await rejectedPage();
+    let disposed = 0;
+    const submit = page.get('MileagePhotoForm').onValidSubmit({ receipt: {}, dashboard: null });
+    const input = { key: id, dispose: () => disposed++ };
+    if (stage === 'request') { page.preparations[0].resolve(input); await page.flush(); }
+    if (leave === 'blur') page.blur();
+    else { page.auth.state = { status: 'signedIn', user: { id: 'user-2' } }; page.render(); }
+    if (stage === 'preparation') page.preparations[0].resolve(input);
+    else { assert.equal(page.calls[0].signal.aborted, true); page.calls[0].resolve(item(id)); }
+    await submit; await page.flush();
+    assert.equal(disposed, 1); assert.equal(page.get('NoticeModal').visible, false); assert.deepEqual(page.navigation, []);
+    page.unmount();
+  }
+});
+
+test('reselection releases the failed attempt and stale notices cannot affect a new account', async () => {
+  const page = await rejectedPage();
+  let disposed = 0;
+  const submit = page.get('MileagePhotoForm').onValidSubmit({ receipt: {}, dashboard: null });
+  page.preparations[0].resolve({ key: 'first-key', dispose: () => disposed++ }); await page.flush();
+  page.calls[0].reject(new authApi.AuthApiError('실패')); await submit; await page.flush();
+  page.get('NoticeModal').onConfirm();
+  page.get('MileagePhotoForm').onSelectionChange(); assert.equal(disposed, 1);
+  const second = page.get('MileagePhotoForm').onValidSubmit({ receipt: null, dashboard: {} });
+  assert.equal(page.preparations.length, 2);
+  page.preparations[1].resolve({ key: 'second-key', dispose: () => disposed++ }); await page.flush();
+  assert.equal(page.calls[1].input.key, 'second-key');
+  page.calls[1].resolve(item(id)); await second; await page.flush();
+  const confirm = page.get('NoticeModal').onConfirm;
+  page.auth.state = { status: 'signedIn', user: { id: 'user-2' } };
+  const firstFrame = page.render(false);
+  assert.equal(nodes(firstFrame).some(node => node.type === 'MileagePhotoForm'), false);
+  assert.equal(nodes(firstFrame).find(node => node.type === 'NoticeModal').props.visible, false);
+  assert.equal(nodes(firstFrame).filter(node => node.type === 'UploadCard').every(node => node.props.image === null), true);
+  confirm(); page.render(); assert.deepEqual(page.navigation, []);
+  page.unmount();
+});
+
+test('stale submission conflict refetches current detail and releases only new prepared copies', async () => {
+  const page = await rejectedPage();
+  let disposed = 0;
+  const submit = page.get('MileagePhotoForm').onValidSubmit({ receipt: {}, dashboard: null });
+  page.preparations[0].resolve({ key: id, dispose: () => disposed++ }); await page.flush();
+  page.calls[0].reject(new authApi.AuthApiError('상태 변경', 'MILEAGE_RESUBMISSION_CONFLICT', 409)); await submit; await page.flush();
+  assert.equal(page.get('NoticeModal').confirmLabel, '다시 시도');
+  page.get('NoticeModal').onConfirm(); await page.flush();
+  assert.equal(disposed, 1); assert.equal(page.details.length, 2);
+  page.unmount();
 });
 
 test('photo preparation enforces format/size, converts only past thresholds, and cleans owned copies', async () => {
@@ -286,6 +369,11 @@ test('photo preparation enforces format/size, converts only past thresholds, and
     assert.throws(() => photos.validateMileagePhoto(asset), { code });
   }
   assert.equal(photos.validateMileagePhoto({ ...image, fileSize: 50*1024*1024 }), 'image/jpeg');
+  const replacement = await photos.prepareMileageResubmission({ receipt: null, dashboard: image }, 'a'.repeat(64));
+  assert.equal(replacement.receipt, undefined); assert.equal(replacement.submissionVersion, 'a'.repeat(64));
+  assert.equal(files.size, 1); replacement.dispose(); assert.equal(files.size, 0);
+  await assert.rejects(photos.prepareMileageResubmission({ receipt: null, dashboard: null }, 'a'.repeat(64)), { code: 'PHOTO_REQUIRED' });
+  await assert.rejects(photos.prepareMileageSubmission({ receipt: image, dashboard: null }), { code: 'PHOTO_REQUIRED' });
   failRender = true;
   await assert.rejects(photos.prepareMileageSubmission({ receipt: image, dashboard: { ...image, width: 5000 } }), { code: 'PHOTO_PREPARATION_FAILED' });
   assert.equal(files.size, 0, 'partial preparation must release the first copied photo');

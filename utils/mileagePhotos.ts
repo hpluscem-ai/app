@@ -5,7 +5,7 @@ import type { ImagePickerAsset } from 'expo-image-picker';
 import { Platform } from 'react-native';
 
 import { AuthApiError } from './authApi';
-import type { MileageSubmission, MileageUpload } from './mileageApi';
+import type { MileageResubmission, MileageSubmission, MileageUpload } from './mileageApi';
 
 const MAX_BYTES = 50 * 1024 * 1024;
 
@@ -32,9 +32,20 @@ function removeTemporary(uri: string) {
   }
 }
 
-export async function prepareMileageSubmission(selection: {
-  receipt: ImagePickerAsset | null; dashboard: ImagePickerAsset | null;
-}): Promise<MileageSubmission & { dispose: () => void }> {
+type PhotoSelection = { receipt: ImagePickerAsset | null; dashboard: ImagePickerAsset | null };
+
+export async function prepareMileageSubmission(selection: PhotoSelection): Promise<MileageSubmission & { dispose: () => void }> {
+  if (!selection.receipt || !selection.dashboard) throw new AuthApiError('영수증과 계기판 사진을 모두 등록해주세요.', 'PHOTO_REQUIRED');
+  const result = await prepareMileagePhotos(selection);
+  return { ...result, receipt: result.receipt!, meter: result.meter! };
+}
+
+export async function prepareMileageResubmission(selection: PhotoSelection, submissionVersion: string): Promise<MileageResubmission & { dispose: () => void }> {
+  if (!selection.receipt && !selection.dashboard) throw new AuthApiError('교체할 사진을 한 장 이상 선택해주세요.', 'PHOTO_REQUIRED');
+  return { ...await prepareMileagePhotos(selection), submissionVersion };
+}
+
+async function prepareMileagePhotos(selection: PhotoSelection) {
   const owned: string[] = [];
   const dispose = () => {
     for (const uri of owned.splice(0)) {
@@ -83,8 +94,8 @@ export async function prepareMileageSubmission(selection: {
     return { uri, name, type };
   };
   try {
-    const receipt = await prepare(selection.receipt, 'receipt');
-    const meter = await prepare(selection.dashboard, 'meter');
+    const receipt = selection.receipt ? await prepare(selection.receipt, 'receipt') : undefined;
+    const meter = selection.dashboard ? await prepare(selection.dashboard, 'meter') : undefined;
     return { key: randomUUID(), receipt, meter, dispose };
   } catch (error) {
     dispose();
