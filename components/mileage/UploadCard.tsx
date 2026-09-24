@@ -15,6 +15,7 @@ type UploadCardProps = {
   kind: UploadKind;
   onChoose?: () => void;
   onRemove?: () => void;
+  onPreview?: (uri: string, title: string) => void;
   disabled?: boolean;
   onImageError?: () => void;
 };
@@ -37,6 +38,7 @@ export function UploadCard({
   kind,
   onChoose,
   onRemove,
+  onPreview,
   disabled = false,
   onImageError,
 }: UploadCardProps) {
@@ -44,18 +46,32 @@ export function UploadCard({
   const label = emptyLabel ?? copy.placeholder;
 
   if (image) {
+    const canPreview = Platform.OS !== 'web' && Boolean(onPreview);
+    const preview = (
+      <Image
+        accessible={!canPreview}
+        accessibilityIgnoresInvertColors
+        accessibilityLabel={`${copy.selected} 미리보기`}
+        resizeMode="cover"
+        source={{ uri: image.uri }}
+        onError={onImageError}
+        style={StyleSheet.absoluteFill}
+      />
+    );
     return (
       <View style={styles.cardShadow}>
         <View style={[styles.uploadCard, styles.selectedUploadCard]}>
-          <Image
-            accessible
-            accessibilityIgnoresInvertColors
-            accessibilityLabel={`${copy.selected} 미리보기`}
-            resizeMode="cover"
-            source={{ uri: image.uri }}
-            onError={onImageError}
-            style={StyleSheet.absoluteFill}
-          />
+          {canPreview ? (
+            <Pressable
+              accessibilityLabel={`${copy.selected} 크게 보기`}
+              accessibilityRole="button"
+              disabled={disabled}
+              onPress={() => onPreview?.(image.uri, copy.selected)}
+              style={StyleSheet.absoluteFill}
+            >
+              {preview}
+            </Pressable>
+          ) : preview}
           {onRemove ? (
             <Pressable
               accessibilityLabel={`${copy.selected} 사진 삭제`}
@@ -72,7 +88,7 @@ export function UploadCard({
               <CloseIcon />
             </Pressable>
           ) : (
-            <View style={styles.previewLabel}>
+            <View pointerEvents={canPreview ? 'none' : undefined} style={styles.previewLabel}>
               <Text style={styles.previewLabelText}>{copy.selected}</Text>
             </View>
           )}

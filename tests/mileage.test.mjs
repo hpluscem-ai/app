@@ -13,6 +13,7 @@ function load(path, imports) {
   return exports;
 }
 const api = load('../utils/mileageApi.ts', { './authApi': authApi });
+const native = { Keyboard: { dismiss() {} }, StyleSheet: { create: x => x, absoluteFill: { position: 'absolute' } }, Platform: { OS: 'web' }, View: 'View', Text: 'Text', Image: 'Image', Modal: 'Modal', Pressable: 'Pressable' };
 function mount(path, extras = {}, params = {}, renderHistory = false) {
   let index = 0, dirty = true, focused = true, mounted = true, tree;
   const slots = [], effects = [], navigation = [], calls = [], details = [], photos = [], preparations = [], summaries = [];
@@ -30,11 +31,12 @@ function mount(path, extras = {}, params = {}, renderHistory = false) {
   const imports = {
     react, 'react/jsx-runtime': { jsx, jsxs: jsx, Fragment: 'Fragment' },
     'expo-router': { useFocusEffect: fn => react.useEffect(() => focused ? fn() : undefined, [fn, focused]), useRouter: () => ({ push: url => navigation.push(url), replace: url => navigation.push(url) }), useLocalSearchParams: () => params, Stack: { Screen: 'Stack.Screen' }, Redirect: 'Redirect' },
-    'react-native': { Keyboard: { dismiss() {} }, StyleSheet: { create: x => x }, Platform: { OS: 'web' }, View: 'View', Text: 'Text' },
+    'react-native': native,
     'expo-linear-gradient': { LinearGradient: 'Gradient' },
-    'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0 }) },
+    'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0 }), SafeAreaProvider: 'SafeAreaProvider', SafeAreaView: 'SafeAreaView' },
     '../../constants/theme': { colors: {}, typography: {}, webAppFrame: {} },
     '../../components/AppScreen': { AppScreen: 'AppScreen' },
+    '../../components/AppBar': { AppBar: 'AppBar' },
     '../../components/AuthProvider': { useAuth: () => auth },
     '../../components/NoticeModal': { NoticeModal: 'NoticeModal' },
     '../../components/mileage/MileagePhotoForm': { MileagePhotoForm: 'MileagePhotoForm' },
@@ -251,12 +253,126 @@ test('detail uses server status, protects photos and revokes previews on leaving
   page.blur(); assert.equal(disposed, 2); page.unmount();
 });
 
-async function rejectedPage() {
-  const page = mount('../app/mileage/[status].tsx', {}, { id, status: 'rejected' });
-  page.details[0].resolve({ ...item(id, 'rejected'), submissionVersion: 'a'.repeat(64), photos: { receipt: 'path', meter: 'path' } }); await page.flush();
+async function rejectedPage(platform = 'web', params = { id, status: 'rejected' }) {
+  const page = mount('../app/mileage/[status].tsx', { 'react-native': { ...native, Platform: { OS: platform } } }, params);
+  page.details[0].resolve({ ...item(id, params.status), submissionVersion: 'a'.repeat(64), photos: { receipt: 'path', meter: 'path' } }); await page.flush();
   for (let i = 0; i < 2; i++) { page.photos[i].resolve({ uri: `blob:${i}`, dispose() {} }); await page.flush(); }
   return page;
 }
+
+test('native photos open from pending and rejected detail without fetching, and all close paths preserve the form', async () => {
+  for (const platform of ['ios', 'android']) for (const status of ['pending', 'rejected']) {
+    const page = await rejectedPage(platform, { id, status });
+    const open = page.get(status === 'pending' ? 'UploadCard' : 'MileagePhotoForm').onPreview;
+    assert.equal(typeof open, 'function');
+    for (const close of ['appbar', 'system', 'accessibility']) {
+      open('blob:0', '요소수 영수증');
+      assert.equal(page.get('Modal').visible, true);
+      assert.equal(page.get('Image').source.uri, 'blob:0');
+      assert.equal(page.get('Image').resizeMode, 'contain');
+      assert.equal(page.get('AppBar').title, '요소수 영수증');
+      if (close === 'appbar') page.get('AppBar').onBack();
+      else if (close === 'system') page.get('Modal').onRequestClose();
+      else page.get('SafeAreaView').onAccessibilityEscape();
+      assert.equal(page.get('Modal'), undefined);
+      assert.equal(page.get('Image'), undefined);
+    }
+    assert.equal(page.photos.length, 2);
+    assert.equal(page.details.length, 1);
+    assert.deepEqual(page.navigation, []);
+    if (status === 'rejected') assert.equal(page.get('MileagePhotoForm').existingImages.receipt.uri, 'blob:0');
+    page.unmount();
+  }
+});
+
+test('native enlargement releases images on selection, submission, blur, account and application changes', async () => {
+  for (const change of ['selection', 'submission', 'blur', 'account', 'application', 'error']) {
+    const params = { id, status: 'rejected' };
+    const page = await rejectedPage('ios', params);
+    const open = page.get('MileagePhotoForm').onPreview;
+    assert.equal(typeof open, 'function');
+    open('blob:0', '요소수 영수증');
+    assert.equal(page.get('Image').source.uri, 'blob:0');
+    if (change === 'selection') page.get('MileagePhotoForm').onSelectionChange();
+    if (change === 'submission') void page.get('MileagePhotoForm').onValidSubmit({ receipt: {}, dashboard: null });
+    if (change === 'blur') page.blur();
+    if (change === 'account') page.auth.state = { status: 'signedIn', user: { id: 'user-2' } };
+    if (change === 'application') params.id = '22222222-2222-4222-8222-222222222222';
+    if (change === 'error') page.get('Image').onError();
+    assert.equal(nodes(page.render(false)).some(node => node.type === 'Modal'), false);
+    page.render();
+    if (['blur', 'account', 'application', 'submission', 'error'].includes(change)) {
+      open('blob:0', '요소수 영수증');
+      assert.equal(page.get('Modal'), undefined);
+    }
+    if (change === 'error') assert.equal(page.get('NoticeModal').confirmLabel, '다시 시도');
+    if (change === 'blur') {
+      page.focus();
+      open('blob:0', '요소수 영수증');
+      assert.equal(page.get('Modal'), undefined);
+    }
+    page.unmount();
+  }
+});
+
+test('photo enlargement leaves web detail and new applications unchanged', async () => {
+  for (const status of ['pending', 'rejected']) {
+    const page = await rejectedPage('web', { id, status });
+    assert.equal(page.get(status === 'pending' ? 'UploadCard' : 'MileagePhotoForm').onPreview, undefined);
+    assert.equal(page.get('Modal'), undefined);
+    page.unmount();
+  }
+  const page = mount('../app/mileage/apply.tsx');
+  assert.equal(page.get('MileagePhotoForm').onPreview, undefined);
+  page.unmount();
+});
+
+test('closed photo callbacks cannot close a newer photo or show a stale image error', async () => {
+  const page = await rejectedPage('ios');
+  page.get('MileagePhotoForm').onPreview('blob:0', '요소수 영수증');
+  const oldError = page.get('Image').onError;
+  const oldClose = page.get('Modal').onRequestClose;
+  oldClose(); page.render(); oldError();
+  assert.equal(page.get('NoticeModal').visible, false);
+  page.get('MileagePhotoForm').onPreview('blob:1', '요소수 계기판');
+  oldClose(); oldError();
+  assert.equal(page.get('Image').source.uri, 'blob:1');
+  assert.equal(page.get('NoticeModal').visible, false);
+  page.unmount();
+});
+
+test('native preview and removal are sibling touch targets and empty cards keep choosing photos', () => {
+  for (const platform of ['ios', 'android', 'web']) {
+    const card = load('../components/mileage/UploadCard.tsx', {
+      'react/jsx-runtime': { jsx: (type, props) => ({ type, props }), jsxs: (type, props) => ({ type, props }) },
+      'react-native': { ...native, Platform: { OS: platform } },
+      '../../constants/theme': { colors: {}, typography: {} },
+      '../icons/CloseIcon': { CloseIcon: 'CloseIcon' },
+      '../icons/DashboardIcon': { DashboardIcon: 'DashboardIcon' },
+      '../icons/ReceiptIcon': { ReceiptIcon: 'ReceiptIcon' },
+    }).UploadCard;
+    const opened = []; let removed = 0, chosen = 0;
+    const props = { error: false, kind: 'receipt', image: { uri: 'selected:receipt' }, onPreview: (...args) => opened.push(args), onRemove: () => removed++, onChoose: () => chosen++ };
+    const tree = card(props);
+    const preview = nodes(tree).find(node => node.props?.accessibilityLabel === '요소수 영수증 크게 보기');
+    const remove = nodes(tree).find(node => node.props?.accessibilityLabel === '요소수 영수증 사진 삭제');
+    if (platform === 'web') assert.equal(preview, undefined);
+    else {
+      assert.ok(preview);
+      assert.equal(nodes(preview).includes(remove), false);
+      preview.props.onPress();
+      assert.deepEqual(opened, [['selected:receipt', '요소수 영수증']]);
+      assert.equal(removed, 0);
+      const disabled = nodes(card({ ...props, disabled: true })).find(node => node.props?.accessibilityLabel === '요소수 영수증 크게 보기');
+      assert.equal(disabled.props.disabled, true);
+    }
+    remove.props.onPress(); assert.equal(removed, 1);
+    const empty = card({ ...props, image: null });
+    nodes(empty).find(node => node.type === 'Pressable').props.onPress();
+    assert.equal(chosen, 1);
+    assert.equal(nodes(empty).some(node => node.props?.accessibilityLabel === '요소수 영수증 크게 보기'), false);
+  }
+});
 
 test('rejected detail submits selected photos once and preserves key/bytes for retry', async () => {
   const page = await rejectedPage();

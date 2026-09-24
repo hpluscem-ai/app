@@ -869,3 +869,14 @@
 - AI는 구현·직접 검토·격리 자동 검사를 수행했고 사용자는 UI 배치와 계기판 주유량 기준을 결정했다. 이 보조 대화에서는 별도 에이전트를 사용하지 않았다. 실제 사용자 DB·유료 외부 호출·별도 QA 캠페인·새 브랜치·이번 변경 커밋·배포는 수행하지 않았다.
 
 - 후속 커밋 요청: 서버 `96b9904`, 어드민 `774d55a`에 위 완료 범위를 커밋했다. 승인 API 미완료 상태를 커밋 본문에 명시했다.
+
+## 2026-09-24 — 네이티브 신청 사진 크게 보기
+
+- 사용자 요청/승인: 기존 사진 카드와 확대 영역을 한 장의 러프 와이어프레임으로 제시한 뒤 사용자가 `진행`을 지시했다. 앞서 추천한 대기·반려 상세 적용, 사진 영역 탭으로 열기, 기존 앱바 뒤로가기로 닫기, 핀치 없이 크게 보기의 최소안으로 진행한다고 고지하고 구현했다. 신규 신청·웹 UI·OCR·정산은 변경하지 않았다.
+- 구현: `app/mileage/[status].tsx`가 확대 대상과 현재 화면/요청의 소유 관계를 관리한다. React Native `Modal`·`Image`와 기존 `AppBar`를 사용하고 화면에 맞춰 비율을 유지해 표시한다. 별도 라우트를 push하지 않아 아래 반려 폼의 선택 상태가 유지된다. 모달 안의 `SafeAreaProvider`와 `SafeAreaView`로 상하 시스템 영역을 처리하며 상단 여백은 기존 앱바가 담당한다.
+- 사진/이벤트 수명: `mileagePhotoPreview()`가 만든 기존 메모리 URI를 그대로 사용한다. 반려 폼에서 새로 선택한 사진도 현재 카드의 URI를 전달한다. 닫기·선택 변경·재등록 시작·화면 이탈·사용자/신청 변경 시 참조를 비우며, 닫은 사진의 늦은 오류와 종료 콜백은 새로 연 사진이나 현재 안내창에 반영하지 않는다. 조회·저장·업로드 API와 사진 준비/폐기 코드는 변경하지 않았다.
+- 기존 동작 유지: `UploadCard`의 선택적인 확대 콜백과 중앙 삭제 버튼을 형제 터치 영역으로 배치했다. 반려 라벨 전체의 삭제 동작을 유지하고 대기의 읽기 전용 라벨은 사진 탭을 가로막지 않는다. `MileagePhotoForm`은 콜백만 전달하며 기존 카드 스타일을 보존했다. 새 라이브러리·핀치/이동 제스처·애니메이션은 추가하지 않았다.
+- 문서 확인: 설치 버전 Expo `~57.0.13`·React Native `0.86.2`를 확인하고 [Expo v57](https://docs.expo.dev/versions/v57.0.0/), [Safe Area](https://docs.expo.dev/versions/v57.0.0/sdk/safe-area-context/), [React Native 0.86 Modal](https://reactnative.dev/docs/0.86/modal)을 대조했다. Android 모달의 시스템 뒤로가기는 `onRequestClose`로 처리하며 iOS 전용 확대 동작을 Android에 가정하지 않았다.
+- 자동 검사: 새 기능 검사 세 개의 구현 전 실패와 닫힌 사진의 지연 오류 회귀 실패를 확인한 뒤 수정했다. `node --experimental-strip-types --test tests/mileage.test.mjs tests/mileageApi.test.mjs` 26개, `pnpm typecheck`가 통과했다. 전체 `tests/*.test.mjs`는 88개 중 87개 통과, 기존 `The loopback server exposes both QA pages without exposing other files or mutations` 1개가 샌드박스의 `listen EPERM 127.0.0.1`로 실패했다. 이 실패를 통과 처리하거나 QA 서버/권한 설정을 변경하지 않았다. Node의 기존 타입 제거·모듈 형식 경고가 출력됐다.
+- 검토/한계: 이 보조 대화의 서브에이전트 금지에 따라 동일 실행자가 변경 diff와 상태 수명·이벤트 경계·접근성을 검토했다. 자동 검사는 네이티브 컴포넌트/API 대역으로 실행했으며 실제 iOS/Android의 화면 렌더링·터치·스크린리더·서버 연결은 확인하지 않았다. 별도 QA 캠페인·실제 DB 적용·외부 유료 호출·새 브랜치·커밋·배포는 수행하지 않았다.
+- 리뷰 순서: `app/mileage/[status].tsx`(확대/닫기/수명) → `components/mileage/UploadCard.tsx`(확대와 삭제의 터치 분리) → `components/mileage/MileagePhotoForm.tsx`(기존 선택 URI 전달) → `tests/mileage.test.mjs`(플랫폼·경합 회귀) → `AGENTS.md`와 이 기록(승인 범위·검증 결과). 기존 사용자 변경을 보존했다.

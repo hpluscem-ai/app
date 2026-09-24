@@ -26,6 +26,7 @@ type MileagePhotoFormProps = {
   locked?: boolean;
   existingImages?: { receipt: { uri: string } | null; dashboard: { uri: string } | null };
   onImageError?: () => void;
+  onPreview?: (uri: string, title: string) => void;
   requirement: MileagePhotoRequirement;
   submitLabel: string;
 };
@@ -40,6 +41,7 @@ export function MileagePhotoForm({
   onSelectionChange,
   existingImages,
   onImageError,
+  onPreview,
 }: MileagePhotoFormProps) {
   const {
     showImageSourceActions,
@@ -172,6 +174,7 @@ export function MileagePhotoForm({
             onRemove={() => { if (lockedRef.current) return; onSelectionChange?.(); setReceiptImage(null); setHidden(value => ({ ...value, receipt: true })); }}
             disabled={locked}
             onImageError={onImageError}
+            onPreview={onPreview}
           />
           <UploadCard
             error={
@@ -186,6 +189,7 @@ export function MileagePhotoForm({
             onRemove={() => { if (lockedRef.current) return; onSelectionChange?.(); setDashboardImage(null); setHidden(value => ({ ...value, dashboard: true })); }}
             disabled={locked}
             onImageError={onImageError}
+            onPreview={onPreview}
           />
         </View>
       </View>

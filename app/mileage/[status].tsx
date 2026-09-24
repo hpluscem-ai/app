@@ -1,7 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
 import { Redirect, Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image, Modal, Platform, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
+import { AppBar } from '../../components/AppBar';
 import { AppScreen } from '../../components/AppScreen';
 import { useAuth } from '../../components/AuthProvider';
 import { NoticeModal } from '../../components/NoticeModal';
@@ -24,11 +26,14 @@ export default function MileageStatusRoute() {
   const [images, setImages] = useState<{ receipt: { uri: string } | null; dashboard: { uri: string } | null }>({ receipt: null, dashboard: null });
   const [retry, setRetry] = useState(0);
   const [notice, setNotice] = useState<{ message: string; action: 'reload' | 'leave' | 'close' | 'success'; controller: AbortController; scope: string } | null>(null);
+  const [expandedPhoto, setExpandedPhoto] = useState<{ uri: string; title: string; controller: AbortController; scope: string } | null>(null);
+  const photoRef = useRef(expandedPhoto);
+  const clearPhoto = () => { photoRef.current = null; setExpandedPhoto(null); };
   const [busy, setBusy] = useState(false);
   const inFlight = useRef(false);
   const submitted = useRef(false);
   const prepared = useRef<Awaited<ReturnType<typeof prepareMileageResubmission>> | null>(null);
-  const resetSubmission = () => { prepared.current?.dispose(); prepared.current = null; };
+  const resetSubmission = () => { prepared.current?.dispose(); prepared.current = null; clearPhoto(); };
   const active = useRef<AbortController | null>(null);
   const valid = typeof id === 'string' && /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/i.test(id) && (status === 'pending' || status === 'rejected');
 
@@ -43,6 +48,7 @@ export default function MileageStatusRoute() {
     setDetail(null);
     setImages({ receipt: null, dashboard: null });
     setNotice(null);
+    clearPhoto();
     if (valid && id) void (async () => {
       try {
         const data = await request(session => getMileageApplication(id, session, controller.signal));
@@ -81,6 +87,7 @@ export default function MileageStatusRoute() {
       !images.receipt || !images.dashboard || inFlight.current || submitted.current) return;
     const current = () => scopeRef.current === scope && active.current === controller && !controller.signal.aborted;
     inFlight.current = true;
+    clearPhoto();
     setBusy(true);
     try {
       if (!prepared.current) {
@@ -108,11 +115,25 @@ export default function MileageStatusRoute() {
   const title = detail ? `${formatMileageDate(new Date(detail.submittedAt))}. ${rejected ? '반려' : '대기'}` : '';
   const imageError = () => {
     const controller = active.current;
-    if (controller && !controller.signal.aborted && scopeRef.current === scope && !inFlight.current && !submitted.current) setNotice({ message: '사진을 표시하지 못했습니다. 다시 시도해주세요.', action: 'reload', controller, scope });
+    if (controller && !controller.signal.aborted && scopeRef.current === scope && !inFlight.current && !submitted.current) {
+      clearPhoto();
+      setNotice({ message: '사진을 표시하지 못했습니다. 다시 시도해주세요.', action: 'reload', controller, scope });
+    }
   };
 
   const visibleNotice = notice?.scope === scope && notice.controller === active.current && !notice.controller.signal.aborted ? notice : null;
   const displayedImages = detail ? images : { receipt: null, dashboard: null };
+  const photoController = active.current;
+  const openPhoto = Platform.OS === 'web' ? undefined : (uri: string, photoTitle: string) => {
+    if (!photoController || photoController !== active.current || photoController.signal.aborted ||
+      scopeRef.current !== scope || !detail || inFlight.current || submitted.current || visibleNotice) return;
+    const photo = { uri, title: photoTitle, controller: photoController, scope };
+    photoRef.current = photo;
+    setExpandedPhoto(photo);
+  };
+  const visiblePhoto = expandedPhoto?.scope === scope && expandedPhoto.controller === active.current &&
+    !expandedPhoto.controller.signal.aborted && detail && !visibleNotice && !busy && !submitted.current ? expandedPhoto : null;
+  const closePhoto = () => { if (photoRef.current === visiblePhoto) clearPhoto(); };
 
   return (
     <>
@@ -123,19 +144,45 @@ export default function MileageStatusRoute() {
             intro={detail.rejectionReason ?? ''} existingImages={images}
             onValidSubmit={submit} onSelectionChange={resetSubmission}
             requirement="atLeastOne" submitLabel="재등록" onImageError={imageError}
+            onPreview={openPhoto}
             locked={busy || submitted.current || Boolean(visibleNotice) || !images.receipt || !images.dashboard} />
         ) : (
           <View style={styles.pageContent}>
             <View style={styles.uploadSection}>
               <Text style={styles.description}>심사 완료 전에는 사진을 수정할 수 없습니다.</Text>
               <View style={styles.uploadRow}>
-                <UploadCard emptyLabel="영수증 사진" error={false} image={displayedImages.receipt} kind="receipt" onImageError={imageError} />
-                <UploadCard emptyLabel="계기판 사진" error={false} image={displayedImages.dashboard} kind="dashboard" onImageError={imageError} />
+                <UploadCard emptyLabel="영수증 사진" error={false} image={displayedImages.receipt} kind="receipt" onImageError={imageError} onPreview={openPhoto} />
+                <UploadCard emptyLabel="계기판 사진" error={false} image={displayedImages.dashboard} kind="dashboard" onImageError={imageError} onPreview={openPhoto} />
               </View>
             </View>
           </View>
         )}
       </AppScreen>
+      {Platform.OS !== 'web' && visiblePhoto && (
+        <Modal visible animationType="none" presentationStyle="fullScreen" onRequestClose={closePhoto}>
+          <SafeAreaProvider>
+            <SafeAreaView
+              edges={['left', 'right', 'bottom']}
+              style={styles.photoScreen}
+              accessibilityViewIsModal
+              onAccessibilityEscape={closePhoto}
+            >
+              <AppBar title={visiblePhoto.title} onBack={closePhoto} />
+              <Image
+                accessible
+                accessibilityIgnoresInvertColors
+                accessibilityLabel={visiblePhoto.title}
+                resizeMode="contain"
+                source={{ uri: visiblePhoto.uri }}
+                style={styles.expandedImage}
+                onError={() => {
+                  if (photoRef.current === visiblePhoto && visiblePhoto.controller === active.current && !visiblePhoto.controller.signal.aborted && scopeRef.current === scope) imageError();
+                }}
+              />
+            </SafeAreaView>
+          </SafeAreaProvider>
+        </Modal>
+      )}
       <NoticeModal accessibilityLabel={visibleNotice?.action === 'success' ? '신청 접수 완료' : '신청 조회 안내'}
         confirmLabel={visibleNotice?.action === 'reload' ? '다시 시도' : '확인'}
         message={visibleNotice?.message ?? ''} visible={visibleNotice !== null}
@@ -153,6 +200,14 @@ export default function MileageStatusRoute() {
 }
 
 const styles = StyleSheet.create({
+  photoScreen: {
+    flex: 1,
+    backgroundColor: colors.white,
+  },
+  expandedImage: {
+    flex: 1,
+    width: '100%',
+  },
   pageContent: {
     width: '100%',
     minHeight: 543,
