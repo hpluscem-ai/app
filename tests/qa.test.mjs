@@ -35,8 +35,8 @@ test('Both checklists render all cases in order, cover all pages, and exclude co
   for (const route of ['/map', '/mileage', '/mileage/apply', '/mileage/pending', '/mileage/rejected', '/term', '/privacy', '/collection', '/marketing']) {
     assert.ok(documents.user.includes('— ' + route), route);
   }
-  for (const route of ['#/login', '#/dashboard', '#/drivers', '#/infrastructure', '#/infrastructure/new', '#/infrastructure/edit/:id',
-    '#/receipts', '#/settlements', '#/settlements/new', '#/settlements/edit/:id', '#/erd']) {
+  for (const route of ['/login', '/dashboard', '/drivers', '/infrastructure', '/infrastructure/new', '/infrastructure/edit/:id',
+    '/receipts', '/settlements', '/settlements/new', '/settlements/edit/:id', '/erd']) {
     assert.ok(documents.admin.includes('— ' + route), route);
   }
   const malicious = renderQa(documents.user + '\n<img src=x onerror=alert(1)> [unsafe](javascript:alert(1))');
