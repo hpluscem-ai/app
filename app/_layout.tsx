@@ -71,6 +71,19 @@ function RootNavigator() {
           }}
         >
           <Stack.Screen name="index" options={{ headerShown: false }} />
+          <Stack.Screen name="term" options={{ title: '이용약관' }} />
+          <Stack.Screen
+            name="privacy"
+            options={{ title: '개인정보처리방침' }}
+          />
+          <Stack.Screen
+            name="collection"
+            options={{ title: '개인정보 수집 및 이용 동의' }}
+          />
+          <Stack.Screen
+            name="marketing"
+            options={{ title: '마케팅 정보 수신 동의' }}
+          />
           <Stack.Screen
             name="reset-password"
             options={{ title: '비밀번호 재설정' }}

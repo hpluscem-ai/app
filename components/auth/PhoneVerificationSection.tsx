@@ -55,6 +55,7 @@ export function PhoneVerificationSection({
 }: PhoneVerificationSectionProps) {
   const actionInFlightRef = useRef(false);
   const inputRevisionRef = useRef(0);
+  const pendingVerificationRef = useRef<{ code: string; revision: number } | null>(null);
   const previousVerificationScopeRef = useRef(verificationScope);
   const [hasRequestedCode, setHasRequestedCode] = useState(false);
   const [isRequesting, setIsRequesting] = useState(false);
@@ -207,6 +208,7 @@ export function PhoneVerificationSection({
     }
 
     actionInFlightRef.current = true;
+    pendingVerificationRef.current = null;
     const verificationRevision = inputRevisionRef.current;
     setIsVerifying(true);
     setValue('verificationProof', '', { shouldDirty: true });
@@ -225,6 +227,7 @@ export function PhoneVerificationSection({
         clearErrors('verificationCode');
         setValue('verificationProof', result.verificationProof, {
           shouldDirty: true,
+          shouldValidate: true,
         });
       } else if (
         result.status === 'verified' &&
@@ -260,6 +263,17 @@ export function PhoneVerificationSection({
       setIsVerifying(false);
     }
   };
+
+  useEffect(() => {
+    const pending = pendingVerificationRef.current;
+    if (actionInFlightRef.current || !pending) return;
+    pendingVerificationRef.current = null;
+    // Only retry an edited code, using the current scope and disabled state.
+    if (pending.revision === inputRevisionRef.current &&
+      getValues('verificationCode') === pending.code) {
+      void verifyCode(pending.code);
+    }
+  });
 
   return (
     <View style={styles.fields}>
@@ -328,13 +342,21 @@ export function PhoneVerificationSection({
               const formattedCode = formatVerificationCode(nextValue);
 
               inputRevisionRef.current += 1;
+              pendingVerificationRef.current = null;
               setValue('verificationProof', '', { shouldDirty: true });
+              if (expiresAt !== null && expiresAt > Date.now()) {
+                clearErrors('verificationCode');
+              }
               onChange(formattedCode);
 
               if (
                 hasRequestedCode &&
                 validateVerificationCode(formattedCode) === true
               ) {
+                pendingVerificationRef.current = {
+                  code: formattedCode,
+                  revision: inputRevisionRef.current,
+                };
                 void verifyCode(formattedCode);
               }
             }}

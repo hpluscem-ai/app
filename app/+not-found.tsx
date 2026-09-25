@@ -99,7 +99,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   button: {
-    width: 80,
+    width: 'auto',
     height: 52,
     alignItems: 'center',
     justifyContent: 'center',

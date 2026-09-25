@@ -7,6 +7,7 @@ import { AppScreen } from '../components/AppScreen';
 import { useAuth } from '../components/AuthProvider';
 import { NoticeModal } from '../components/NoticeModal';
 import { FormTextField } from '../components/auth/FormTextField';
+import { LegalDocumentLink } from '../components/auth/LegalDocumentLink';
 import { PhoneVerificationSection } from '../components/auth/PhoneVerificationSection';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
 import { CheckSquareIcon } from '../components/icons/CheckSquareIcon';
@@ -122,7 +123,8 @@ export default function MyPageRoute() {
     setValue,
     watch,
   } = form;
-  const [name, phone, marketingConsent] = watch(['name', 'phone', 'marketingConsent']);
+  const [name, phone, marketingConsent, verificationProof] =
+    watch(['name', 'phone', 'marketingConsent', 'verificationProof']);
   const phoneChanged = Boolean(profile && phone !== profile.phone);
   const hasChanges = Boolean(profile && (
     name.trim() !== profile.name || marketingConsent !== profile.marketingConsent || phoneChanged
@@ -130,6 +132,7 @@ export default function MyPageRoute() {
   const purpose = phoneChanged ? 'change_phone' : 'reset_password';
   const { requestCode, verifyCode, isProofValid, resetVerification, revision } =
     usePhoneVerification(purpose, profile?.email ?? '');
+  const canSave = hasChanges || isProofValid({ phone, verificationProof });
   const busy = isSavingProfile || isSendingResetLink || isProcessingAccount;
   const formDisabled = !profile || busy;
 
@@ -185,16 +188,17 @@ export default function MyPageRoute() {
   const submitValidForm = (focus: object) => handleSubmit(async (values) => {
     if (activeFocus.current !== focus || !profile) return;
     const changingPhone = values.phone !== profile.phone;
-    if (changingPhone && !isProofValid(values)) {
+    const changes = {
+      ...(values.name.trim() === profile.name ? {} : { name: values.name }),
+      ...(values.marketingConsent === profile.marketingConsent ? {} : { marketingConsent: values.marketingConsent }),
+    };
+    if ((changingPhone || !Object.keys(changes).length) && !isProofValid(values)) {
       setValue('verificationProof', '');
       showPhoneVerificationRequiredAlert();
       return;
     }
+    if (!changingPhone && !Object.keys(changes).length) changes.name = values.name;
     try {
-      const changes = {
-        ...(values.name.trim() === profile.name ? {} : { name: values.name }),
-        ...(values.marketingConsent === profile.marketingConsent ? {} : { marketingConsent: values.marketingConsent }),
-      };
       const updated = Object.keys(changes).length
         ? await request((session) => updateProfile(changes, session))
         : profile;
@@ -221,7 +225,7 @@ export default function MyPageRoute() {
   })();
   const submitForm = async () => {
     const focus = activeFocus.current;
-    if (!focus || formRequestInFlight.current || accountRequestInFlight.current || !profile || !hasChanges) return;
+    if (!focus || formRequestInFlight.current || accountRequestInFlight.current || !profile || !canSave) return;
     formRequestInFlight.current = true;
     setIsSavingProfile(true);
     try {
@@ -327,7 +331,12 @@ export default function MyPageRoute() {
                           마케팅 수신에 동의합니다.
                         </Text>
                       </Pressable>
-                      <Text style={styles.detailsText}>보기</Text>
+                      <LegalDocumentLink
+                        document="marketing"
+                        style={styles.detailsText}
+                      >
+                        보기
+                      </LegalDocumentLink>
                     </View>
                   )}
                 />
@@ -335,7 +344,7 @@ export default function MyPageRoute() {
             </View>
 
             <PrimaryButton
-              disabled={formDisabled || !hasChanges}
+              disabled={formDisabled || !canSave}
               label="정보 변경하기"
               onPress={submitForm}
             />

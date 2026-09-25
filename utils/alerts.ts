@@ -122,47 +122,8 @@ export function useAlerts() {
       notify('회원가입 완료', '회원가입이 완료되었습니다.', onConfirm, false);
     }
 
-    function showKakaoVerificationRequestPendingAlert() {
-      notify(
-        '인증번호 발송 준비 중',
-        '카카오톡 인증번호 발송은 서버 연동 후 동작합니다.',
-      );
-
-      return { status: 'unavailable' } as const;
-    }
-
-    function showKakaoVerificationCheckPendingAlert() {
-      notify(
-        '인증번호 확인 준비 중',
-        '인증번호 확인과 인증 증명 발급은 서버 연동 후 동작합니다.',
-      );
-
-      return { status: 'unavailable' } as const;
-    }
-
     function showPhoneVerificationRequiredAlert() {
       notify('휴대폰 인증 필요', '인증번호 확인을 완료해주세요.');
-    }
-
-    function showProfileServerPendingAlert() {
-      notify(
-        '정보 변경 서버 연동 필요',
-        '내 정보 저장 API가 정해진 뒤 변경 요청을 연결합니다.',
-      );
-    }
-
-    function showProfilePasswordResetServerPendingAlert() {
-      notify(
-        '비밀번호 재설정 이메일 서버 연동 필요',
-        '로그인된 사용자의 이메일로 재설정 링크를 발송하는 API가 정해진 뒤 요청을 연결합니다.',
-      );
-    }
-
-    function showResetPasswordServerPendingAlert() {
-      notify(
-        '비밀번호 변경 서버 연동 필요',
-        '재설정 Token 검증과 비밀번호 변경 API가 정해진 뒤 변경 요청을 연결합니다.',
-      );
     }
 
     function showTmapOpenFailedAlert() {
@@ -185,12 +146,7 @@ export function useAlerts() {
       showMileageReRegistrationServerPendingAlert,
       showAuthErrorAlert,
       showSignupSuccessAlert,
-      showKakaoVerificationRequestPendingAlert,
-      showKakaoVerificationCheckPendingAlert,
       showPhoneVerificationRequiredAlert,
-      showProfileServerPendingAlert,
-      showProfilePasswordResetServerPendingAlert,
-      showResetPasswordServerPendingAlert,
       showTmapOpenFailedAlert,
     };
   }, [showNotice]);

@@ -449,7 +449,7 @@
 
 ## AUTH-004 비밀번호 재설정
 
-- 최신 상태(2026-09-10): 사용자 요청으로 메일 공급자를 Postmark에서 Resend로 변경했고 앱 비밀번호 찾기의 SMS·메일 요청을 연결했다. 재설정 소비 함수와 서버 연동 검증은 마쳤지만 변경 화면의 사전 토큰 검증 계약과 링크 환경은 확인 대기다. 아래 2026-09-08 기록의 Postmark는 당시 공급자이며 현재 외부 설정은 Resend 기준이다. 회사 발신 도메인·표시 이름·실제 재설정 URL과 앱 재설정 화면 연동은 아직 미완료다.
+- 최신 상태(2026-09-13): 메일 공급자는 Resend이며 앱 비밀번호 찾기의 SMS·메일 요청과 재설정 화면의 사전 검증·토큰 소비를 연결했다. 비소비 검증 API를 승인받아 구현하고 서버 발급 토큰으로 로컬 웹 흐름을 확인했다. 아래 2026-09-08 기록의 Postmark는 당시 공급자다. 회사 발신 도메인·표시 이름·실제 재설정 URL, 실제 문자·메일 수신과 설치 앱 링크는 미검증이다.
 - 상태(2026-09-08): `purpose: reset_password` SMS 발송·확인과 계정 일치 확인·Postmark 메일 요청·토큰 발급/소비를 서버에 구현했다. 발송 시 `email`과 `phone`이 모두 필요하고 증명은 해당 조합에 묶인다. 실제 발신 설정과 앱 연동은 미완료이며 SMS 성공만으로 계정 복구를 완료 처리하지 않는다.
 - 재설정 소비(2026-09-08): `POST /api/v1/auth/reset-password`에 `{ token, newPassword }`를 보내면 DB의 유효한 기사 토큰을 SHA-256으로 조회하고 Argon2id 저장·본인 전체 세션 폐기·기존 미사용 링크 소비를 원자적으로 처리한다. 성공은 본문 없는 `204`, 입력 오류는 `400 VALIDATION_ERROR`, 만료·재사용·알 수 없는 토큰·사용 불가 계정은 `400 PASSWORD_RESET_INVALID`, 해시/저장 실패는 `500 INTERNAL_SERVER_ERROR`다. 인증 응답은 `no-store`다. 후속 Postmark 발급 API까지 서버에 구현했지만 실제 메일 설정·수신과 앱 연동을 검증하기 전까지 사용자 이메일 복구 전체 흐름은 부분 완료다.
 - 검증·리뷰(2026-09-08): 메인 타입 검사·린트·빌드·단위 17개·전체 E2E 224개 통과. 새로운 재설정 27개는 유효 토큰·타인 세션 보존·동시 소비·해시 중 자격 변경·해시 실패·비밀번호/토큰/세션 저장 실패 롤백·Swagger를 검증했다. 두 독립 리뷰어가 관련 E2E 128개를 각각 통과했고 기능 리뷰어는 재사용 DTO 검증 9개도 별도 확인했다. 미해결 차단 지적은 없다. 기존 DB 테이블의 Drizzle 매핑만 추가했으며 개발 DB 초기화·실제 메일 발송은 수행하지 않았다.
@@ -483,13 +483,13 @@
 
 ### 2026-09-10 — 앱 계정 찾기 연동과 재설정 확인 대기
 
-- 사용자 결정: 이메일 찾기·비밀번호 찾기·재설정까지 로컬 서버에 연결하도록 요청했다. 기존 서버 연결의 와이어프레임 생략과 SMS 타이머 스타일 승인을 유지했다. 새 토큰 검증 API와 메일 링크 환경은 질문을 보냈으며 아직 답변이 없다.
+- 사용자 결정: 이메일 찾기·비밀번호 찾기·재설정까지 로컬 서버에 연결하도록 요청했다. 기존 서버 연결의 와이어프레임 생략과 SMS 타이머 스타일 승인을 유지했다. 당시 새 토큰 검증 API와 메일 링크 환경은 답변을 기다렸으며, 토큰 검증 API는 아래 2026-09-13 후속 작업에서 승인·구현됐다.
 - AI 지원: `authApi.ts`에 실제 목적별 SMS·마스킹 이메일 조회·메일 접수·재설정 소비 요청과 응답 검증을 연결했다. 세 화면에서 반복되는 서버 인증 ID·증명·만료 확인만 `usePhoneVerification`으로 공유했다. `PhoneVerificationSection`은 기존 폼·타이머·입력 변경 무효화 책임을 그대로 유지한다. 비밀번호 찾기의 기존 발송 단정 문구는 서버가 반환한 계정 존재 여부 비노출 접수 문구로 바꿨다. 새 라이브러리·세션 저장소·서버 엔드포인트는 추가하지 않았다.
 - React Native/웹 차이: React Hook Form의 제출 검증 전에 `useRef`로 중복 요청을 막고 요청 중 네이티브 입력의 `editable`과 공용 버튼의 `disabled`를 제어한다. SMS 증명은 화면 메모리에만 두며 SecureStore·웹 저장소에 쓰지 않는다. 서버의 만료 시각을 기존 타이머에 전달하고 인증 목적·이메일·연락처가 일치하는 증명만 최종 요청에 사용한다. 다른 작업에서 추가한 웹 쿠키 인증·공용 안내 모달을 보존했다.
 - 실패 처리: 미가입 이메일 조회의 `404`도 증명을 소비하므로 결과 없음 안내 후 다시 SMS 인증한다. 메일 요청 결과가 불확실해도 동일 증명을 자동 재전송하지 않는다. 설정 누락·외부 실패·만료·잘못된 응답은 결과 화면을 만들지 않는다. 클라이언트가 새 재발송 대기시간이나 횟수 제한을 추가하지 않았다.
 - 실제 검증: 앱 `pnpm typecheck`, `pnpm test:auth` 7개와 `git diff --check` 통과. Expo iOS·Android·웹 번들 모두 통과했다. 임시 NestJS·메모리 SQLite에 실제 앱 API 모듈을 연결해 가입·로그인→마스킹 조회/미가입→재설정 메일 접수→새 비밀번호 저장·이전 비밀번호 거부·모든 기존 세션 폐기·토큰 재사용 거부를 확인했다. 외부 SMS·Resend 공급자만 테스트에서 대체했고 개발 DB와 실제 수신자에는 요청하지 않았다. 로컬 포트의 샌드박스 제한은 허용된 격리 실행으로 해결했다.
 - 브라우저 검증: 실제 Expo 웹 번들에서 SMS 성공 뒤 타이머·인증 뒤 제출 활성화·마스킹 이메일 표시·비밀번호 찾기 이동·메일 접수 문구를 확인했다. 인증 뒤 이메일 변경 시 증명·인증번호·타이머가 폐기되고, 미가입 조회 후 안내와 재인증 상태가 표시되는 것도 확인했다. 실제 네이티브 기기·메일 수신·재설정 화면·딥링크는 검증하지 않았다.
-- 남은 서버 계약: 앱 규칙상 새 비밀번호 폼을 유효한 서버 토큰으로 제한해야 하지만 현재 서버에는 소비 API만 있다. `POST /api/v1/auth/reset-password/validate { token }`로 비소비 검증, 유효 시 `204`, 무효·만료 시 기존 `PASSWORD_RESET_INVALID`를 반환하는 계약을 제안했으며 승인 전에는 추가하지 않았다. 설치 앱·Expo Go·웹 중 링크 테스트 환경도 확인 대기다. 전체 복구 연동을 완료로 보고하지 않는다.
+- 당시 남은 서버 계약(2026-09-13 아래 후속 작업에서 해결): 앱 규칙상 새 비밀번호 폼을 유효한 서버 토큰으로 제한해야 했지만 당시 서버에는 소비 API만 있었다. `POST /api/v1/auth/reset-password/validate { token }`로 비소비 검증, 유효 시 `204`, 무효·만료 시 기존 `PASSWORD_RESET_INVALID`를 반환하는 계약을 제안했으며 승인 전에는 추가하지 않았다. 설치 앱·Expo Go·웹 중 링크 테스트 환경도 확인 대기다. 전체 복구 연동을 완료로 보고하지 않는다.
 - 실제 설정: 이번 확인 시 서버 `.env`의 `RESEND_API_KEY`·`RESEND_FROM_EMAIL`·`RESEND_FROM_NAME`·`PASSWORD_RESET_URL`은 모두 비어 있었다. 이전 Resend 테스트 메일 접수 기록과 현재 환경 상태를 구분한다. 키·발신자·도메인·링크를 임의로 채우거나 실제 메시지를 보내지 않았다.
 
 이번 변경 파일의 리뷰 순서:
@@ -574,6 +574,44 @@
 - 재실행: 로그인된 `/mypage`의 팝업을 모두 닫은 CUA `tab`에서 `await (await import('/Users/sangkun/nocoders/hpluseco/hpluseco-app/tests/noticeModal.browser.mjs')).checkNoticeModalClosing(tab)`를 실행한다. 닫히는 프레임을 포착하지 못하면 통과 처리하지 않는다.
 - 리뷰 순서: [NoticeModal.tsx](../components/NoticeModal.tsx)의 표시 내용 유지 → [noticeModal.browser.mjs](../tests/noticeModal.browser.mjs)의 취소·재열기 검사 → 이 기록의 원인·검증 범위.
 
+## 2026-09-13 — 마이페이지 서버 연동
+
+- 사용자 요청: 남은 작업 중 마이페이지와 비밀번호 재설정을 진행하도록 요청했다. 이 단계에서는 마이페이지를 기존 API 계약에 연결하고 재설정 사전 검증 계약의 답변을 기다렸다. 이후 UI를 유지한 기능 연결을 승인받았으며 아래 후속 기록에 재설정 구현·브라우저 검증 결과를 남겼다.
+- AI 구현: `/mypage` 진입 시 `GET /users/me`로 폼을 채우고 실패하면 기존 `NoticeModal`의 재시도 방식을 사용한다. 성함·마케팅 동의는 실제로 바뀐 필드만 `PATCH /users/me`로 보낸다. 서버가 돌려준 이름을 인증 상태에도 반영한다. 연락처 변경은 별도 요청이며 일반 정보 저장 뒤 연락처 요청이 실패하면 전체 완료 안내를 표시하지 않는다.
+- 인증 흐름: 등록된 번호는 이메일·연락처에 묶인 `reset_password` SMS를 사용해 `POST /auth/me/password-reset-emails`로 메일을 요청한다. 새 번호는 기사 세션에 묶인 `phone-change/verifications` 발송·확인을 거쳐 `POST /auth/change-phone`으로 저장한다. 기존 폼과 3분 타이머를 재사용하며 목적 전환·번호/코드 수정·만료에 따른 증명 무효화를 유지한다. 최종 연락처/메일 요청 뒤에는 결과가 불확실해도 증명을 제거한다. 일반 정보 변경만 할 때는 빈 인증번호를 허용한다.
+- React Native·웹 차이: [Expo SDK 57 문서](https://docs.expo.dev/versions/v57.0.0/)를 확인했다. 화면이 스택에 남아 있는 네이티브 탐색을 고려해 `useFocusEffect`에서 조회하고 포커스를 잃은 요청 결과는 폼에 반영하지 않는다. 기존 플랫폼 파일을 통해 네이티브는 같은 서버의 SecureStore Bearer, 웹은 HttpOnly 쿠키를 사용한다. 보호 API의 `401 INVALID_SESSION`은 인증 상태를 종료하고 네트워크·서버 오류는 세션을 유지한다. 이전 요청의 늦은 401이 새로 로그인한 네이티브 세션을 지우지 않도록 확인한다.
+- 실제 검증: `pnpm typecheck`, `pnpm test:auth` 18개, `git diff --check`를 통과했다. iOS·Android·웹 Metro export가 성공했다. 테스트는 네트워크 응답과 SecureStore를 메모리 대역으로 바꿔 전송 필드·인증 방식·실패·세션 격리를 검사했다. Chrome에서 별도의 테스트 화면을 열었지만 브라우저가 격리 테스트 API 접속을 차단해 화면 조작 검증은 완료하지 못했다. 실제 문자·메일 발송/수신과 실기기 검증은 수행하지 않았다. 기존 Sentry organization/project 설정 경고는 남아 있다.
+- 후속 상태: 아래 작업에서 사전 검증 계약을 승인받고 마이페이지·재설정 웹 흐름을 확인했다. 실제 재설정 링크 환경과 실기기 검증은 남아 있다. 요청 범위를 선택한 것은 사용자이며 구현·자동 검사·코드 검토는 AI가 수행했다.
+
+리뷰 순서와 이번 변경 파일:
+
+1. [authApi.ts](/Users/sangkun/nocoders/hpluseco/hpluseco-app/utils/authApi.ts): 프로필·연락처·본인 메일 계약과 요청 필드/응답 검증.
+2. [authSession.ts](/Users/sangkun/nocoders/hpluseco/hpluseco-app/utils/authSession.ts), [authSession.web.ts](/Users/sangkun/nocoders/hpluseco/hpluseco-app/utils/authSession.web.ts), [AuthProvider.tsx](/Users/sangkun/nocoders/hpluseco/hpluseco-app/components/AuthProvider.tsx): 플랫폼 인증·만료·늦은 응답·이름 갱신.
+3. [usePhoneVerification.ts](/Users/sangkun/nocoders/hpluseco/hpluseco-app/hooks/usePhoneVerification.ts), [PhoneVerificationSection.tsx](/Users/sangkun/nocoders/hpluseco/hpluseco-app/components/auth/PhoneVerificationSection.tsx): 목적별 증명과 선택적 인증번호 검증.
+4. [mypage.tsx](/Users/sangkun/nocoders/hpluseco/hpluseco-app/app/mypage.tsx), [alerts.ts](/Users/sangkun/nocoders/hpluseco/hpluseco-app/utils/alerts.ts): 조회·부분 저장·SMS·메일·오류 조정과 사용하지 않는 연동 대기 안내 제거.
+5. [authApi.test.mjs](/Users/sangkun/nocoders/hpluseco/hpluseco-app/tests/authApi.test.mjs), [authSession.test.mjs](/Users/sangkun/nocoders/hpluseco/hpluseco-app/tests/authSession.test.mjs): 인증 전송·폼 전용 필드 제외·실패 시 세션 처리의 회귀 검사.
+6. [AGENTS.md](/Users/sangkun/nocoders/hpluseco/hpluseco-app/AGENTS.md), [개발 기록](/Users/sangkun/nocoders/hpluseco/hpluseco-app/docs/development-notes.md): 연결 상태와 미검증 범위.
+
+## 2026-09-13 — UI 유지 후 마이페이지 검증·비밀번호 재설정 연결
+
+- 사용자 결정: 기존 UI·배치·스타일·문구를 유지하고 기능만 연결하는 표를 검토한 뒤 진행을 승인했다. 비소비 토큰 검증 계약도 포함한다. 기존 마이페이지 작업 변경을 보존했으며 별도 기획 문서·새 라이브러리·브랜치를 만들지 않았다.
+- AI 구현: `POST /api/v1/auth/reset-password/validate { token }`는 기존 토큰 조회·활성 기사·활성 소속·만료/소비 검사를 재사용한다. 유효하면 본문 없는 `204`와 `Cache-Control: no-store`, 무효는 `400 PASSWORD_RESET_INVALID`, 형식 오류는 `400 VALIDATION_ERROR`, DB 장애는 `500`을 반환하며 Swagger에 기록했다. 검증으로 토큰을 소비하거나 만료 기한·세션·비밀번호를 변경하지 않는다. 실제 소비 API의 재검증·원자적 저장·전체 본인 세션 폐기는 유지했다.
+- 화면 연결: 서버 토큰을 쿼리에서 읽고 유효성 확인 후에만 기존 폼을 보여준다. 서버 사전 검증 오류는 기존 공용 안내창 확인 후 재시도하며, 없는/무효 링크는 비밀번호 찾기 또는 로그인 중인 마이페이지로 보낸다. 제출 중 중복 요청과 편집을 막고 실제 `204` 뒤에만 기존 완료 팝업을 표시한다. 로그인 버튼에서 기존 `restore()`로 폐기된 세션을 재확인·정리하고 시작 경로로 이동한다. 다른 계정의 유효한 세션을 임의로 폐기하지 않는다.
+- React Native·웹 차이: Expo SDK 57 Router 문서를 확인했다. 네이티브 화면은 스택에 남을 수 있으므로 `useFocusEffect`에서 검증하고 포커스·토큰 변경 뒤의 늦은 응답을 무시한다. 재설정 화면은 로그인 중에도 링크를 열 수 있도록 `Stack.Protected` 밖에 두되 데이터 접근은 서버 토큰으로 제한한다. 토큰은 화면 메모리에만 유지하며 저장소에 기록하지 않는다. 플랫폼별 SecureStore/HttpOnly 쿠키 정리는 기존 세션 경계를 재사용한다.
+- 자동 검증: 앱 `pnpm typecheck`, `pnpm test:auth` 18개, 서버 `pnpm exec tsc --noEmit --incremental false`, 단위 23개·전체 E2E 494개(14 suites), 변경 서버 파일 ESLint와 양쪽 `git diff --check`를 통과했다. 추가 검사는 반복 검증의 무변경·세션 토큰/추가 필드 거부·만료/계정 변경 후 재검증·DB 장애·Swagger 계약을 다룬다. 웹·iOS·Android Metro export가 모두 성공했다. 단위 검사의 Watchman 샌드박스 접근 실패는 `--watchman=false`로 해결했다.
+- 브라우저 검증: 별도 포트의 실제 Expo 웹 번들과 Nest 서버·메모리 SQLite를 사용했다. 조회 → 성함/마케팅 동의만 SMS 없이 저장 → 새로고침 후 보존 → 새 번호 SMS 확인·연락처 저장 → 등록 번호 SMS 재인증·본인 메일 요청 → 로그인 중 재설정 링크 접근 → 사전 검증 500 안내·재시도 → 비밀번호 불일치 차단 → 변경 성공·로그인 이동 → 기존 비밀번호 거부·새 비밀번호 로그인 → 링크 재사용 차단·비밀번호 찾기 이동을 확인했다. 프로필 조회 500 재시도와 만료 세션 저장 401·로그인 이동도 확인했다. DB에서 실제 변경 값·토큰 소비·세션 폐기를 대조했다.
+- 검증 경계: 외부 SMS·Resend 발송만 테스트 프로세스 안에서 대체했고 인증번호·증명·재설정 토큰은 실제 서버 로직이 발급했다. 테스트 계정은 메모리 DB에만 만들었다. 사용자 DB·실제 수신자·회사 도메인/발신 설정·운영 링크는 변경하지 않았다. 실제 SMS·메일 수신과 iOS·Android 설치 앱 링크/터치는 미검증이며 기존 Sentry 설정 경고가 남아 있다. 구현·코드 검토·검증은 AI가 수행했고 사용자가 실제 기기 결과를 확인한 것으로 기록하지 않는다. 검증용 API·웹 서버와 브라우저 탭은 종료했다.
+
+이번 후속 변경 파일의 리뷰 순서:
+
+| 순서 | 파일 | 확인 책임 |
+| --- | --- | --- |
+| 1 | [auth.service.ts](/Users/sangkun/nocoders/hpluseco/hpluseco-server/src/auth/auth.service.ts), [auth.controller.ts](/Users/sangkun/nocoders/hpluseco/hpluseco-server/src/auth/auth.controller.ts), [reset-password.dto.ts](/Users/sangkun/nocoders/hpluseco/hpluseco-server/src/auth/reset-password.dto.ts) | 기존 토큰 조회 재사용, 비소비 검증, 요청·Swagger 계약 |
+| 2 | [reset-password.tsx](/Users/sangkun/nocoders/hpluseco/hpluseco-app/app/reset-password.tsx), [_layout.tsx](/Users/sangkun/nocoders/hpluseco/hpluseco-app/app/_layout.tsx) | 링크 접근, 서버 검증, 늦은 응답 무시, 실제 변경 성공과 세션 복원 |
+| 3 | [authApi.ts](/Users/sangkun/nocoders/hpluseco/hpluseco-app/utils/authApi.ts), [alerts.ts](/Users/sangkun/nocoders/hpluseco/hpluseco-app/utils/alerts.ts) | 검증 요청의 토큰 전송·204 확인, 기존 안내창 확인 콜백 |
+| 4 | [change-password.e2e-spec.ts](/Users/sangkun/nocoders/hpluseco/hpluseco-server/test/change-password.e2e-spec.ts), [authApi.test.mjs](/Users/sangkun/nocoders/hpluseco/hpluseco-app/tests/authApi.test.mjs) | 토큰 무변경·소비·오류·API 응답 검증 |
+| 5 | [AGENTS.md](/Users/sangkun/nocoders/hpluseco/hpluseco-app/AGENTS.md), [개발 기록](/Users/sangkun/nocoders/hpluseco/hpluseco-app/docs/development-notes.md) | 승인 정책, 현재 연결 상태, 실제 검증 범위 |
+
 ## APP-001 로그인 이후 이동
 
 - 상태: 2026-09-10 앱 세션 복원·보호 라우트·실제 이름 인사말을 연결했다. 마일리지 초기 조회는 이번 연동 범위가 아니다.
@@ -611,9 +649,10 @@
 
 ## MAP-READ-001 설치 주유소 지도 조회
 
+- 최신 결정(2026-09-24): 서비스는 주유소 위치·기본정보 등록만 관리하며 실제 운영은 각 주유소가 담당한다. 운영 상태 변경 UI/API는 개발 범위에서 제외하고 아래 과거 기록의 미구현 항목을 후속 작업으로 다시 추가하지 않는다. 복수 기기 편집은 사용자 확인까지 보류한다. 기존 `active` 필드·조회 조건·기기 관계는 이번 결정으로 변경하지 않는다.
 - 최신 상태(2026-09-22): 사용자 앱의 임시 주유소를 제거하고 기존 기사 지도 경계·상세 API를 연결했다. 화면 진입·재진입과 지도 범위 변경 시 조회하며 기존 클라이언트 클러스터·정보창·길안내 UI를 유지한다. 서버 클러스터·캐시 정책과 어드민 등록·수정 연동은 이 변경에 포함하지 않는다. 구현·검증 범위는 아래 2026-09-22 기록을 따른다.
 - 상태(2026-09-09): 서버 주유소 등록·수정·목록·상세·지도 경계 조회에 실제 삭제·기기 제거를 추가했다. 사용자 결정으로 별도 좌표 검수 절차는 생략한다. 운영 상태 변경·서버 클러스터·프런트 연동은 미구현이다.
-- 관리자 API: `GET/POST /api/v1/admin/stations`, `GET/PUT /api/v1/admin/stations/:id`는 관리자 전용이다. `pole, businessName, area, roadAddress, siteType(station|direct_sales), latitude, longitude, devices[{model, capacityLiters}]`가 필수이고 `note`는 선택이다. 용량은 단위 없는 양의 안전 정수(L), 위경도는 WGS84 숫자다. 현재 관리자 폼에 없는 소재지·구분과 복수 기기 입력은 연동 전 보완해야 하며 서버는 주소 추출·샘플·기본값으로 채우지 않는다.
+- 관리자 API: `GET/POST /api/v1/admin/stations`, `GET/PUT /api/v1/admin/stations/:id`는 관리자 전용이다. `pole, businessName, roadAddress, latitude, longitude, devices[{model, capacityLiters}]`가 필수이고 `note`는 선택이다. 용량은 단위 없는 양의 안전 정수(L), 위경도는 WGS84 숫자다. 2026-09-22 사용자 결정으로 주유소만 관리하며 별도 소재지·구분 필드를 제거하고 도로명 주소 하나만 저장한다. 복수 기기 편집 UI는 추가하지 않는다.
 - 저장 계약: 부모와 기기를 하나의 트랜잭션으로 등록·수정·제거한다. 수정은 전체 입력이며 비고 생략은 비고 없음으로 저장한다. 유지할 기존 기기는 ID를 포함하고 새 기기만 ID를 생략하며 목록에서 빠진 기존 기기는 실제 삭제한다. 최소 1개 기기 규칙은 유지한다. 타 부모/없는 ID·중복 ID는 `409 UNKNOWN_DEVICE | DUPLICATE_DEVICE_ID`로 거부한다. 동시 전체 수정은 마지막 저장된 목록을 적용하므로 연동 시 최신 전체 기기 목록을 보내야 한다. 새 수정 충돌 관리 기능은 추가하지 않았다.
 - 삭제 계약(2026-09-09): 관리자 전용 `DELETE /api/v1/admin/stations/:id`는 주유소와 종속된 모든 기기를 기존 FK CASCADE로 함께 실제 삭제하고 `204`를 반환한다. 없는 주유소·반복 삭제는 `404 STATION_NOT_FOUND`, 잘못된 UUID는 `400 BAD_REQUEST`, 무효 관리자 세션은 `401 INVALID_ADMIN_SESSION`, 저장 실패는 `500 INTERNAL_SERVER_ERROR`다. 다른 주유소·기사·영수·정산은 변경하지 않는다. 별도 기기 삭제/관리 API·복구 API·운영 상태 변경은 제공하지 않는다. 이 단계에 새 DDL·의존성을 추가하거나 실제 개발 DB를 변경하지 않았다.
 - 기사 API: 기사 세션으로 `GET /api/v1/stations`, `GET /api/v1/stations/:id`, `GET /api/v1/stations/map?south=&west=&north=&east=`를 조회한다. 운영 중인 부모만 반환하고 기기별 운영 여부를 배열로 제공한다. 지도는 양 끝 포함 범위이며 west > east는 날짜변경선을 지나는 범위다. 확대 단계·최대 응답 수·클러스터·캐시 정책은 제공하지 않는다. 현재 위치를 서버에 전달하지 않는다.
@@ -632,7 +671,7 @@
 
 ## PROFILE-001 내 정보 조회·변경
 
-- 상태: 클라이언트 레이아웃 구현. 서버 본인 정보 조회·성함·마케팅 동의 변경·현재 비밀번호 변경·SMS 인증 후 연락처 변경과 일회용 토큰 재설정 소비를 구현했다. 이메일 링크 발급/전송·앱 연동은 미구현.
+- 상태: 서버 본인 정보·현재 비밀번호 변경·SMS 연락처 변경·재설정 메일 발송·일회용 토큰 소비를 구현했다. 2026-09-13 앱 마이페이지의 조회·일반 정보 저장·연락처 변경·본인 메일 요청을 연결했다. 재설정 사전 검증·소비 API와 화면을 연결하고 격리된 로컬 웹에서 마이페이지부터 새 비밀번호 로그인까지 확인했다. 실제 문자·메일 수신과 설치 앱 링크·실기기 흐름은 미검증이다.
 - 조회: 인증된 사용자의 변경 불가 이메일, 성함, 연락처와 마케팅 수신 동의 상태를 제공
 - API: `GET /api/v1/users/me`는 `{ email, name, phone, marketingConsent }`만 반환한다. `PATCH /api/v1/users/me`는 `{ name?, marketingConsent? }` 중 하나 이상을 받아 저장 후 같은 정보를 반환한다. 생략한 값은 유지하고 `null`·빈 성함·다른 필드는 거부한다. 성함은 가입과 동일한 문자·공백 1~100자 정책을 사용한다.
 - 인증·저장: 기존 기사 Bearer 세션으로 본인 식별자를 결정하며 요청의 사용자 식별자는 사용하지 않는다. 성함·동의는 한 SQL 문장으로 함께 저장하고 실패 시 함께 롤백된다. 독립 필드의 동시 변경은 서로 지우지 않으며 같은 필드는 마지막 성공한 변경이 남는다. 일반 변경은 세션을 폐기하지 않고 이메일·연락처·소속·비밀번호를 변경하지 않는다.
@@ -676,10 +715,63 @@
 - 관리자(2026-09-08): `POST /api/v1/admin/auth/login`, `GET /api/v1/admin/auth/me`, `POST /api/v1/admin/auth/logout` 구현. 기존 활성 관리자 계정만 로그인하며 `ADMIN_SESSION_TTL_SECONDS`에 명시한 최대 유지기간으로 별도 `admin_sessions`를 발급한다. 기본 유지기간은 없고 미설정·잘못된 설정은 `503 ADMIN_AUTH_NOT_CONFIGURED`다. 현재 세션만 로그아웃하며 최대 만료 시각을 연장하지 않는다. 초기 계정 생성·추가 미사용 만료·로그인 시도 제한은 보류했다. 기사 토큰을 받지 않으며 기존 물류사 관리자 API 전체에 관리자 역할·세션 검사를 적용했다. 미인증은 `401 INVALID_ADMIN_SESSION`, DB 장애는 `500 INTERNAL_SERVER_ERROR`; 공개 소속 선택 API는 공개로 유지한다. 프런트 연동·외부 배포는 수행하지 않았다.
 - 관리자 검증·리뷰(2026-09-08): 메인 단위 19개·전체 E2E 250개·타입 검사·비수정 린트·빌드·diff 검사 통과. 신규 관리자 E2E 26개는 실제 로그인, 기사/관리자 토큰 분리·역할 변경·만료·비활성화, 설정·입력 오류, 저장/조회 장애와 Swagger를 확인했다. `003-admin-sessions.sql`은 v1/v2 데이터 보존과 실패 롤백·재시작을 검사했다. 두 독립 리뷰어도 관련 E2E 103개와 DB 단위 17개를 각각 통과했고 미해결 지적은 없었다. 테스트 관리자와 세션은 격리 테스트에서만 생성했다.
 - 삭제·참조(2026-09-09 확정): 기사 탈퇴 후 이름·이메일 원문·전화번호 원문·소속·기존 ID와 영수/정산을 보존하며 새 가입으로 재가입한다. 비밀번호·세션·재설정·관련 SMS 증명은 폐기한다. 개인정보 보관 기간은 아직 미정이다. 주유소와 개별 기기는 실제 삭제하고 별도 좌표 검수는 진행하지 않는다. 물류사는 기존 `active=false`와 소속 기사 전체 세션 폐기 정책을 유지한다.
-- 주유소: 등록·수정·목록·상세·지도 경계 조회·주유소 실제 삭제·개별 기기 제거는 MAP-READ-001에 기록했다. 서버는 실제 `area`·`siteType` 입력을 요구하며 현재 관리자 폼의 입력 보완·연동과 운영 상태 변경은 별도 작업이다. 별도 좌표 검수는 사용자 결정으로 생략했다.
+- 주유소: 등록·수정·목록·상세·지도 경계 조회·주유소 실제 삭제·개별 기기 제거는 MAP-READ-001에 기록했다. 2026-09-22 사용자 결정으로 `area`·`siteType`을 제거하고 주소 하나로 통일한다. 어드민은 기존 데스크톱 폼에 등록·수정을 연결하며 운영 상태 변경은 별도 작업이다. 별도 좌표 검수는 사용자 결정으로 생략했다.
 - 사진·영수: 비공개 R2·중복 의심·반려 재등록·자동 승인 방향은 MILEAGE-APPLY-001에 기록했다. 더 선명한 사진 재확인 전에는 OCR 값을 확정하지 않는다. 업로드·보관/파기·최대 픽셀, OCR 담당 범위와 주유량(L)의 실제 출처·금액 확정·반려 사유 규칙은 남아 있다. 금액 필드만으로 1L당 20마일리지를 계산하거나 OCR 결과를 만들어서는 안 된다.
 - 정산: 기사 최종 금액/마일리지 합계의 대상, 월 집계 기준 시각·시간대, 승인된 이체/결과 엑셀 양식과 재실행·완료 반영 기준이 필요하다. 물류사 정보 CRUD를 정산 기록 변경으로 해석하지 않고 실제 은행 이체·완료 취소·임의 정산 삭제를 추가하지 않는다.
 - 검증 경계: 실제 문자·메일 발송, 운영 서비스 생성·배포, 앱·관리자 API 연동, 운영 데이터 변경과 다중 프로세스 DB 경합은 수행하지 않았다. 관리자 기존 빌드·린트와 앱 타입 검사는 통과했으며 프런트 구현 파일은 이번 작업에서 변경하지 않았다.
+
+## 2026-09-14 약관 초안·회사 정보·실제 발신 설정
+
+### 사용자 결정과 구현 범위
+
+- 사용자가 이용약관 등 문서는 우선 초안으로 작성하고 회사 정보는 공식 홈페이지 기준으로 반영하도록 위임했다. 네이버 지도 키 설정은 보류하고 이미 설정한 TMAP AppKey를 확인했다.
+- 기존 푸터·회원가입·마이페이지의 문구 위치와 스타일은 유지하면서 링크 기능을 연결했다. `public/legal.html` 한 파일에 이용약관, 개인정보처리방침, 필수 수집/이용 동의, 선택 마케팅 동의를 별도 문서 구역으로 작성했다. 문서마다 검토용 초안을 표시하고 실제 보존 정책과 미확정 보관기간·담당자·국외이전 정보를 구분했다. 법적 확정본이나 검토 완료 문서로 취급하지 않는다.
+- 회사명·대표자·사업자번호·대표 전화번호는 [공식 홈페이지](https://www.hpluseco.co.kr/)를 기준으로 반영했다. 주소는 기존 화면과 공식 데스크톱 푸터의 6~8층 표기를 유지했다. 확인되지 않은 개인정보 담당자·앱 고객센터 운영시간은 `확인 예정`으로 표시했다. 문서 구성은 [개인정보보호위원회 2026 작성지침 안내](https://www.privacy.go.kr/front/bbs/bbsView.do?bbsNo=BBSMSTR_000000000049&bbscttNo=20885)를 참고하되 서비스의 미정 운영 조건은 만들지 않았다.
+- Resend 키는 서버의 Git 제외 `.env`에 저장했다. 테스트 발신 주소는 `onboarding@resend.dev`, 표시명은 `에이치플러스에코`, 재설정 URL은 `http://localhost:4000/reset-password`로 설정했다. 실제 수신처·키·인증번호·토큰 원문은 저장소에 기록하지 않았다.
+
+### React Native와 웹의 차이
+
+- 당시 웹의 문서 링크는 `public/legal.html`을 같은 사이트의 새 탭으로 열고, 네이티브는 `EXPO_PUBLIC_SITE_URL`에 접근 가능한 웹 앱 주소를 OS 브라우저에서 열었다. 2026-09-15 사용자 결정으로 네이티브는 같은 Expo Router Stack의 문서 라우트를 앱 내부에서 열도록 변경됐다.
+- `LegalDocumentLink`는 실제로 반복되는 푸터·회원가입·마이페이지 링크만 공유한다. 전달된 기존 텍스트 스타일을 사용하며 링크 밑줄은 `textDecorationLine: 'none'`으로 지정했다. 문서를 보는 동작과 체크박스 동의 변경 동작은 분리했다.
+- 서버 재설정 URL은 기존 HTTPS·앱 스킴 검증을 유지하고, 비운영 환경의 loopback HTTP만 추가로 허용했다. 운영 환경, 외부 HTTP 호스트, 호스트 위장, 사용자 정보가 포함된 URL, 쿼리·fragment를 거부하는 테스트를 추가했다.
+
+### 실제 실행한 검증
+
+- 앱 `pnpm typecheck`, 서버 `pnpm exec tsc --noEmit`, 재설정 메일 E2E 85개, 서버 변경 파일 ESLint, 길안내 URL 테스트 1개가 통과했다.
+- Expo 공개 설정 검사와 웹·iOS·Android export가 성공했으며 `legal.html`이 웹 export 결과에 원문 그대로 포함됨을 확인했다. `expo install --check`는 오프라인 자료에서는 통과했으나 공식 버전 정보에 연결한 검사에서는 기존 Expo SDK 57 관련 패키지 14개의 패치 업데이트를 안내하며 종료 코드 1을 반환했다. 이번 작업에서는 의존성을 바꾸지 않았다.
+- 테스트용 임시 DB와 기존 서버 모듈을 사용해 실제 SOLAPI·Resend를 호출했다. 지정된 수신처 외에는 발송하지 않도록 임시 테스트 스크립트에서 제한했다. 실제 SMS 1건의 접수 201·인증 확인 200, 재설정 메일 접수 202, 해당 서버 발급 토큰의 비소비 검증 204를 두 번 확인했다. 원래 개발 DB·기존 계정 비밀번호는 변경하지 않았다.
+- SOLAPI의 해당 메시지 배달 결과는 `4000 / COMPLETE`, Resend는 `delivered`였다. 공급자 배달 확인과 사용자가 단말·수신함에서 직접 확인한 결과는 구분한다. 사용자에게 실제 도착 여부를 요청했으며 이 기록 시점에는 응답 대기다. 임시 DB를 종료하면 테스트 메일의 링크는 더 이상 유효하지 않다.
+- TMAP Invoke 요청은 공식 `tmap.co.kr/tmap2/mobile/route.jsp`로 이동한 뒤 HTTP 200과 `TMAP route` 문서, 목적지 파라미터를 읽어 `tmap://route`를 구성하는 코드를 확인했다. 실제 휴대폰의 TMAP 실행·길안내 시작은 검증하지 않았다. 앱의 미검증 예시 좌표 차단은 유지했다.
+- 확인용 브라우저에서 문서 원문과 네 구역의 제목·내용은 확인했다. 앱 경유 링크 클릭·밑줄 실측은 브라우저가 로컬 API 18080 접근에 `ERR_BLOCKED_BY_CLIENT`를 반환해 완료하지 못했다. 같은 API의 CLI 응답과 허용 Origin/CORS 헤더는 정상이었으며 세션 실패를 우회하거나 성공으로 표시하지 않았다. iOS·Android 실기기 문서 열기는 미검증이다.
+
+- 작업 후 직접 실행한 웹 4000·격리 API 18080 세션을 종료하고 임시 발송 스크립트를 정리했다. 테스트 메일 링크는 종료된 임시 DB를 대상으로 하므로 이후 실제 계정 재설정에 사용할 수 없다.
+
+### AI 지원과 남은 확인
+
+- AI가 초안 작성, 기존 링크 연결, 설정 변경, 서버 URL 검증과 자동 검사·공급자 배달 조회를 수행했다. 사용자는 초안 허용, 회사 정보 출처, 테스트 수신처, Resend 키, 로컬 발신 설정 위임, 네이버 보류와 TMAP 키 설정을 결정했다.
+- 운영 전 문서 확정본·보존 기한과 근거·개인정보 담당자·위탁/국외이전·앱 고객센터 운영시간·회사 메일 도메인·운영 재설정 URL을 확정해야 한다. 실제 기기와 사용자 수신함 확인은 자동 검사 결과로 대체하지 않는다.
+
+### 이번 작업의 파일 리뷰 순서
+
+| 순서 | 변경 파일 | 확인할 책임 |
+| --- | --- | --- |
+| 1 | `public/legal.html` | 네 가지 문서 초안, 현재 정책과 미확정 항목, 추후 확정본 교체 위치 |
+| 2 | 서버 `src/auth/resend-email.service.ts` | 비운영 loopback HTTP 허용과 운영·외부 URL 거부 |
+| 3 | 서버 `test/password-reset-email.e2e-spec.ts` | 로컬 URL 경계 테스트와 기존 재설정 계약 회귀 검증 |
+| 4 | `components/auth/LegalDocumentLink.tsx` | 웹 상대 링크·네이티브 웹 주소·기존 텍스트 스타일과 밑줄 제거 |
+| 5 | `components/auth/AppFooter.tsx` | 공식 회사 정보와 이용약관·개인정보처리방침 링크 |
+| 6 | `app/sign-up.tsx` | 약관별 보기 연결, 동의 체크박스와 독립 동작 |
+| 7 | `app/mypage.tsx` | 기존 마케팅 보기 문구의 문서 연결만 추가 |
+| 8 | 앱 `.env.example`, 서버 `.env.example` | 네이티브 문서 주소와 로컬 재설정 URL 설정 안내 |
+| 9 | `AGENTS.md`, `docs/development-notes.md` | 이번 승인 범위·실제 검증 결과·미검증 범위 |
+
+## 2026-09-14 네이버 지도 Client ID 설정
+
+- 사용자가 네이버 Maps의 로컬 URL 등록을 알리고 테스트 Client ID 설정을 요청했다. AI가 Git 제외 `.env.local`의 `EXPO_PUBLIC_NAVER_MAP_CLIENT_ID`에 반영했다. 기존 웹 지도는 해당 값을 공식 `ncpKeyId`로 전달하므로 UI·지도 구현 변경은 필요하지 않았다. 네이티브 지도는 기존 `react-native-maps`를 유지한다.
+- `http://localhost:4000`의 임시 SDK 확인 페이지를 브라우저에서 열어 실제 서울 지역 지도 화면과 네이버 지도 타일 20개(각 512×512)의 로딩을 확인했다. 공식 SDK의 인증 실패 안내가 발생하지 않았다. 이 확인은 앱의 로그인·클러스터·위치·주유소 데이터 연동 검증을 대신하지 않는다.
+- 기존 8080 서버의 `GET /api/v1/auth/me`는 `404 NOT_FOUND`를 반환했다. 앱이 요구하는 인증 API를 이용할 수 없어 로그인 후 지도 화면의 전체 흐름은 검증하지 않았다. 기존 서버·인증 경계·다른 사용자 변경은 수정하지 않았다.
+- `pnpm typecheck`, `git diff --check`, Expo 공개 설정 검사가 통과했다. `expo install --check`는 앞선 확인과 동일하게 기존 패키지 14개의 패치 업데이트를 안내하며 종료 코드 1을 반환했다. 의존성은 변경하지 않았다. 확인 후 임시 SDK 페이지와 직접 실행한 웹 서버를 정리했다.
+- 리뷰 순서: `.env.local`(로컬 Client ID 설정) → `AGENTS.md`(지도 설정·검증 범위) → 이 기록(실행한 확인과 남은 확인).
 
 
 ## 2026-09-14 — 마이페이지 비동기 응답의 화면 수명 보호
@@ -728,6 +820,21 @@
 - 검증 한계: 날짜 필터의 이벤트·날짜 경계·DST는 자동 검사했으나 브라우저의 기본 날짜 선택 팝업에서 검증 탭이 충돌해 달력 직접 조작 검증은 완료하지 못했다. 설치 앱·실기기·운영 배포 검증은 별도다. 테스트 API 18080과 웹 15173을 종료했으며 기존 8080·5173 서버는 보존했다.
 - 범위 밖: 정산 월별 집계·이체/엑셀, 주유소 등록/수정은 연결하지 않았다. 서버가 제공하지 않는 금액·마일리지·이체 상태는 샘플이나 0으로 만들지 않고 기존 셀에 `-`를 표시한다. 앱 마일리지·사진 업로드/OCR·실제 주유소 지도 데이터 연결도 이번 관리자 CRUD 완료에 포함하지 않는다.
 
+## 2026-09-15 — 약관 문서 레이아웃과 앱 내 이동
+
+- 사용자가 약관 문서의 최대 폭·헤더·푸터 누락을 지적하고, 와이어프레임 제시 후 `/legal.html#terms` 대신 `/term` 형식으로 모두 변경하도록 요청했다. AI가 문서 라우트 `/term`, `/privacy`, `/collection`, `/marketing`과 공용 `LegalDocumentPage`를 연결했다. 기존 `webAppFrame`의 최대 640px·작은 화면 전체 폭과 `AppBar`·`AppScreen`·`AppFooter`를 재사용하며 페이지별 최대 폭을 추가하지 않았다.
+- 기존 HTML의 네 문서 제목·본문·목록을 `constants/legalDocuments.ts`로 옮기고 원문과 항목별로 대조했다. 초안 내용과 검색 제외 설정을 유지한다. `LegalDocumentLink`의 주소 변경으로 푸터·회원가입·마이페이지의 기존 보기 링크가 함께 바뀌며, 이전 HTML 주소는 해당 새 주소로 이동한다.
+- [Expo SDK 57 문서](https://docs.expo.dev/versions/v57.0.0/)와 설치된 Expo Router를 기준으로 구현했다. 웹은 같은 문서 라우트를 새 탭에서 열며, 네이티브는 `Link push`로 같은 Stack의 문서를 현재 화면 위에 연다. 따라서 회원가입에서 즉시 뒤로가면 입력 상태가 남고, 앱 종료·재시작 후 입력값은 복원하지 않는다. WebView·외부 브라우저 전환·새 의존성을 추가하지 않았다.
+- 검증: `pnpm typecheck`, `node --test tests/legalDocuments.test.mjs`, 웹·iOS·Android Metro export, `git diff --check`가 이번 변경 뒤 통과했다. 회귀 검사는 네이티브 링크가 외부 URL 대신 `push`를 사용하고 네 문서 라우트가 플랫폼 보호 조건 밖에 있는지도 확인한다. 이전 주소의 네 hash와 기본값·잘못된 hash를 검사했으며, export의 `legal.html`이 새 리다이렉트 파일과 일치함을 확인했다.
+- 브라우저에서 네 이전 주소가 각각 새 주소로 이동하고 올바른 문서가 표시됨을 확인했다. 1280px 화면의 프레임·헤더·푸터는 모두 640px, 390px 화면은 모두 390px였다. 네 문서를 320px에서도 확인했고 가로 넘침이 없었다. 웹 푸터와 회원가입 보기 링크의 실제 href·`target="_blank"`·밑줄 없음, 보기 클릭 후 동의 체크박스 미변경을 확인했다. 자동화 브라우저 목록에서는 클릭으로 열린 새 탭이 관찰되지 않아 새 탭 전환 자체와 네이티브 실기기 열기는 검증 완료로 간주하지 않는다.
+- 리뷰 순서: `constants/legalDocuments.ts`(원문) → `components/LegalDocumentPage.tsx`(공용 문서 표시) → 네 문서 라우트와 `app/_layout.tsx`(Stack 접근 범위·공용 헤더) → `components/auth/LegalDocumentLink.tsx`(플랫폼별 링크 동작) → `public/legal.html`·`tests/legalDocuments.test.mjs`(이전 주소 호환·네이티브 Stack 회귀).
+
+## 2026-09-16 — 인증번호 재입력과 마이페이지 저장
+
+- 사용자가 회원정보를 그대로 둔 채 오입력 후 정상 인증하면 마이페이지 저장 버튼이 계속 비활성인 동작을 변경하도록 승인했다. 원인은 저장 조건이 회원정보 변경만 확인한 것이며, 유효한 인증 증명도 저장 조건에 포함했다. 변경값이 없을 때도 기존 이름으로 정보 수정 API를 호출하고 서버 성공 뒤에만 완료를 안내한다. 일반 정보 변경의 SMS 면제와 연락처 변경의 인증 필수 조건은 유지한다.
+- 공통 `PhoneVerificationSection`은 정정 입력의 기존 오류를 지우고 인증 성공 시 폼 유효성을 갱신한다. 확인 요청 중 여러 입력이 들어오면 이전 응답을 무시하고 최신 6자리만 다시 확인한다. 이 입력 순서 문제는 콜백 순서를 제어한 테스트에서 재현했으며 실제 브라우저에서 동일한 타이밍이 발생했다고 단정하지 않는다. 서버의 기존 3분 기한·재발송 시 이전 번호 무효화·소비된 인증 재사용 차단은 변경하지 않았다.
+- 검증: `node --test tests/phoneVerification.test.mjs tests/mypage.test.mjs tests/resetPassword.test.mjs`의 24개 테스트와 `pnpm typecheck`가 통과했다. 네 인증 목적의 오입력 후 정정, 요청 중 최신 입력 확인, 만료·전화번호/이메일 변경·화면 이탈, 변경 없는 저장의 성공/실패/중복 제출을 검사했다. HTTP를 대체한 자동 검사이며 실제 문자 발송·사용자 정보 저장·실기기 테스트는 수행하지 않았다.
+
 ## 2026-09-22 — 기존 UI를 유지한 사용자 주유소 지도 연동
 
 - 사용자 결정: 와이어프레임 검토 후 사용자 앱 지도 연동을 진행하도록 승인했으며 UI 변경 금지를 유지했다. 어드민 주유소 등록·수정과 사진·마일리지 서버 기반은 다른 세션의 범위로 분리했다. 새 브랜치·별도 계획 문서는 만들지 않았다. 구현 후 사용자가 지도 작업 커밋과 QA 페이지 반영을 요청했다.
@@ -759,6 +866,19 @@
 | 7 | `tests/stationsApi.test.mjs` | 지도 계약과 비동기·선택·재시도 회귀 검사 |
 | 8 | `AGENTS.md`, `docs/development-notes.md` | 승인 범위와 실제 검증·미검증 범위 |
 
+
+## 2026-09-22 — 어드민 주유소 등록·수정과 주소 단일화
+
+- 사용자 결정: 어드민은 데스크톱만 대상으로 기존 8개 입력과 UI를 유지한다. 주유소만 관리하므로 별도 소재지 `area`와 시설 구분 `siteType`을 제거하고 `roadAddress` 하나를 사용한다. 사용자가 공유 코드 반영을 승인하여 다른 세션의 사진·마일리지 DB v6 변경과 앱 지도 연동을 보존한 채 필요한 부분만 맞췄다. 새 브랜치·커밋·별도 계획 문서를 만들지 않았다.
+- 어드민: 기존 `requestAdmin`으로 등록 `POST 201`·수정 `PUT 200`을 연결했다. 실제 서버 성공 뒤에만 목록으로 이동한다. 단일 기기 수정은 기존 ID를 유지하고, 복수 기기는 모델·용량 표시값이 그대로면 전체 ID·모델·용량을 보존한다. 복수 기기의 모델·용량을 바꾸면 기존 오류 영역에서 저장을 거부하며 문자열을 임의 분리하거나 기기를 삭제·재생성하지 않는다. 복수 기기 편집 정책과 UI는 미확정이다.
+- 입력·비동기 처리: 양의 안전한 정수 용량, 음수를 포함한 좌표 숫자·범위를 검사한다. 기존 물류사 폼의 제출 잠금 패턴으로 중복 요청과 저장 중 입력 유실을 막고, 화면 이탈 뒤 응답은 반영하지 않는다. 만료된 관리자 세션은 기존 로그인 경로로 이동하며 서버·네트워크 실패를 성공 처리하지 않는다.
+- 서버·앱: DTO·응답·DB 매핑에서 두 필드를 제거하고 `007-station-address-only.sql`을 추가했다. v5/v6 DB의 나머지 주유소 값과 기기 ID·상태·참조를 유지하며 실패한 v7 변경은 롤백한다. 역사적 초기 스키마는 유지하고 새 DB도 기존 마이그레이션 순서로 v7에 도달한다. 앱 지도에서는 해당 두 필드의 타입·응답 검사만 제거했다. 실제 사용자 DB 업그레이드나 운영 배포는 실행하지 않았다.
+- 변경 파일: 어드민 `src/components/InfrastructureForm.tsx`, `src/pages/InfrastructureFormPage.tsx`, `src/stations.ts`, `src/data/databaseErdData.ts`, `tests/stations.test.mjs`, `tests/databaseErd.test.mjs`; 서버 `src/stations/station.dto.ts`, `src/stations/stations.controller.ts`, `src/stations/stations.service.ts`, `src/database/schema.ts`, `src/database/database.service.ts`, `src/database/database.service.spec.ts`, `src/database/007-station-address-only.sql`, `src/database/station-address-migration.spec.ts`, `test/stations.e2e-spec.ts`; 앱 `utils/stationsApi.ts`, `data/mapStations.ts`, `tests/stationsApi.test.mjs`, `AGENTS.md`, 이 기록이다. 기존 ERD에서 승인된 두 필드만 제거했으며 사진·마일리지 v6의 새 테이블·열을 ERD UI에 추가하는 작업은 포함하지 않는다.
+- 원본 코드 검증: 어드민 전체 테스트 57개, 서버 주유소 E2E 72개, 서버 DB·마이그레이션 단위 테스트 26개, 앱 지도·인증·길안내 관련 테스트 32개가 통과했다(합계 187개). 어드민 타입 검사·oxlint·Vite build, 서버 타입 검사·변경 파일 ESLint·임시 출력 경로의 TypeScript build, 앱 typecheck, 각 저장소 diff 검사가 통과했다. 최신 DB 버전에서 미래 버전을 거부하는 기존 테스트의 버전 기대값도 v7 기준으로 갱신했다.
+- 브라우저 검증: 동일 구현의 임시 복사본과 격리 메모리 API에서 관리자 로그인, 주유소 신규 등록·목록 반영·수정, 음수 좌표, 용량 변경, 비고 비우기, 범위 오류와 정정 후 저장을 확인했다. 테스트 탭·프로세스·메모리 DB는 정리했다. 원본 반영 뒤에는 위 자동 검사를 실행했으며 브라우저 전체 시나리오를 다시 실행했다고 해석하지 않는다.
+- UI 유지와 한계: 폼 필드·문구·배치·CSS·크기·간격을 변경하지 않았고 기존 입력·버튼·오류 영역과 제출 잠금을 재사용했다. 데스크톱 화면은 브라우저에서 확인했으나 변경 전후 픽셀 비교는 수행하지 않았다. 등록·수정 실패, 만료 세션, 중복 제출, 늦은 응답, 기기 보존은 자동 회귀로 검증했으며 모두를 브라우저에서 재현한 것은 아니다. 모바일 어드민, 복수 기기 편집, 운영 상태 변경, 실제 DB 업그레이드·배포는 완료 범위에 포함하지 않는다.
+
+
 ## 2026-09-23 — 관리자 영수 조회·사진 모달·반려 API
 
 - 확정 범위: 사용자는 와이어프레임 생략과 기존 UI 유지를 지시했다. 후속 답변으로 반려 사유 필수, 대기에서만 승인/반려, 정산 편입 이후 변경 금지를 확정했다. 금액·주유량은 제출한 영수증·계기판 사진의 표시값을 근거로 하며 돈으로 리터를 추정하지 않는다. 웹 사진은 최대 너비 약 800px 모달, 앱은 앱 내 확대 방식으로 승인했다. OCR 서비스·판독 기준·불일치 금액 확정 방식과 반려 사유 입력 UI는 미확정이다.
@@ -772,6 +892,7 @@
 - 자동 검증: 서버 관리자 영수·관리자 인증·기사 마일리지 E2E 78개, 어드민 영수·인증·기사 회귀 23개, QA 페이지 4개 통과(총 105개). 서버/어드민 타입 검사, 서버 변경 파일 ESLint, 어드민 변경 파일 oxlint와 Vite build를 통과했다. 반려 추가 테스트 7개는 필수 사유, 권한·Origin, 두 관리자의 다른 사유 동시 반려, 재전송, 오래된 사진/판독 버전, 사진 교체 재등록 상태, 승인/정산 편입 잠금과 실패 롤백을 검증한다. 금액 형식의 안전 정수 검증과 리터 적립 반올림 검증을 혼동하지 않는다.
 - 실제 로컬 QA: 원본 소스와 격리 메모리 DB를 별도 포트 15173/18183에서 실행했다. 관리자 로그인·쿠키, 목록 3건·이름/소속 필터·미확정 값·0건·조회 실패와 재조회, 만료 후 로그인 이동을 확인했다. 두 사진의 보기 버튼·모달을 확인했고 1280×720 화면에서 모달 800px, 이미지 760×475px로 측정했다. 닫기 후 포커스 유실을 발견해 원래 보기 버튼으로 복원하도록 고친 후 재검증했다. 사진 오류 뒤 모달 안에서 재시도, 사진 요청 시 만료 세션 이동도 확인했다. 실제 HTTP 반려·동일 재전송·상세 응답이 같음을 검사하고 브라우저 목록 재조회로 상태 변경을 확인했다.
 - 검토/미완료: 보조 대화의 서브에이전트 금지로 동일 실행자가 기능·권한·데이터 관점에서 검토했으며 독립 에이전트 리뷰는 미실행이다. QA 사진 저장소는 생성한 JPEG 대역이고 실제 R2는 미검증이다. 승인 API·OCR·주유량 저장/계산·반올림·승인/반려 화면 조작·동시 승인/반려·실제 재등록/정산 API 경합은 미완료다. 다른 세션이 수정 중인 사용자 앱 사진 화면은 건드리지 않았고 네이티브 확대도 미구현이다. 사용자 DB·R2·문자·메일은 변경하지 않았다. 직접 만든 QA 탭과 서버·메모리 DB는 종료했고 사용한 두 포트가 닫힌 것을 확인했다.
+
 
 ## 2026-09-23 사용자 앱 마일리지 서버 연동과 QA 보완
 
@@ -822,6 +943,7 @@
 - 검증: 먼저 추가한 6개 테스트가 요약 함수/화면 연결 부재로 실패함을 확인한 뒤 구현했다. `node --experimental-strip-types --test tests/mileageApi.test.mjs tests/mileage.test.mjs tests/authApi.test.mjs tests/authSession.test.mjs` 34개와 `pnpm typecheck`, `git diff --check`가 통과했다. 0·양수·잘못된 값·HTTP 오류·인증 전달, 필터/페이지 독립, 동시 오류 재시도, blur/계정 전환/unmount 뒤 늦은 성공·실패를 검사했다. Node의 기존 experimental/type module 경고는 남아 있으며 이를 없애기 위한 패키지 설정 변경은 하지 않았다.
 - 작업/검토 구분: AI가 기존 서버 계약 대조·구현·자동 검사·변경 diff 검토를 수행했고 사용자가 지급일 배지 유지 여부를 결정했다. 보조 대화의 서브에이전트 금지에 따라 별도 검토 에이전트는 실행하지 않고 동일 실행자가 자체 검토했다. 검사에서는 HTTP/네이티브 런타임을 대체했으며 실제 서버·사용자 DB·브라우저·실기기 검증, 별도 QA 캠페인, 배포는 수행하지 않았다.
 - 리뷰 순서: `utils/mileageApi.ts`(요약 계약/검증) → `app/mileage/index.tsx`(화면 수명/잔액/알림) → `tests/mileageApi.test.mjs`, `tests/mileage.test.mjs`(계약·수명 회귀) → `AGENTS.md`, 이 기록(최신 결정과 검증 범위). 기존 사용자 변경을 보존했으며 브랜치·커밋·새 라이브러리·새 계획 문서를 만들지 않았다.
+
 
 ## 2026-09-24 — 반려 마일리지 재등록 API·기존 화면 연결
 

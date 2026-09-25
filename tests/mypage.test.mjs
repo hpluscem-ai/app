@@ -20,7 +20,7 @@ const profile = { email: 'driver@example.test', name: 'Original', phone: '010-12
 async function mount() {
   const slots = [];
   let index = 0, focused = true, focusCallback, cleanup, previousFocus, tree;
-  const state = { name: profile.name, errors: [], proofResets: 0, validation: null };
+  const state = { name: profile.name, errors: [], proofResets: 0, proofValid: true, validation: null };
   const slot = (initial) => {
     const key = index++;
     if (!(key in slots)) slots[key] = initial;
@@ -76,7 +76,7 @@ async function mount() {
     '../components/AuthProvider': { useAuth: () => auth },
     '../constants/theme': { colors: {}, typography: {} },
     '../hooks/usePhoneVerification': { usePhoneVerification: () => ({
-      isProofValid: (values) => values.verificationProof === 'proof',
+      isProofValid: (values) => state.proofValid && values.verificationProof === 'proof',
       resetVerification: () => { state.proofResets++; }, revision: 0,
     }) },
     '../utils/authApi': api,
@@ -221,5 +221,64 @@ test('late account failures do not open errors outside the originating focus', a
     page.account(action); page.blur(); await page.focus();
     old.reject(new Error('old account failure')); await tick();
     assert.deepEqual(page.state.errors, []);
+  }
+});
+
+test('a verified unchanged profile saves through the API and only completes after success', async () => {
+  const page = await mount(), response = deferred(), calls = [];
+  page.api.updateProfile = (changes) => { calls.push(changes); return response.promise; };
+  assert.equal(page.button().disabled, true);
+  page.form.values.verificationProof = 'invalid-proof';
+  assert.equal(page.button().disabled, true);
+  await page.button().onPress();
+  assert.deepEqual(calls, []);
+
+  page.form.values.verificationProof = 'proof';
+  assert.equal(page.button().disabled, false);
+  const pending = page.button().onPress();
+  await tick();
+  assert.deepEqual(calls, [{ name: profile.name }]);
+  assert.equal(page.notice(), null);
+  assert.equal(page.button().disabled, true);
+  await page.button().onPress();
+  assert.equal(calls.length, 1);
+  response.resolve(profile);
+  await pending;
+  assert.deepEqual(page.notice(), { type: 'profile-updated' });
+  assert.equal(page.form.values.verificationProof, '');
+  assert.equal(page.button().disabled, true);
+});
+
+test('a failed unchanged save unlocks for retry without resending SMS or showing success', async () => {
+  const page = await mount();
+  let calls = 0;
+  page.api.updateProfile = async () => { calls++; throw new Error('save failed'); };
+  page.form.values.verificationProof = 'proof';
+  await page.button().onPress();
+  assert.equal(page.notice(), null);
+  assert.deepEqual(page.state.errors, ['save failed']);
+  assert.equal(page.form.values.verificationProof, 'proof');
+  assert.equal(page.state.proofResets, 0);
+  assert.equal(page.button().disabled, false);
+  await page.button().onPress();
+  assert.equal(calls, 2);
+});
+
+test('proof expiry during validation prevents unchanged saves and phone changes', async () => {
+  for (const changePhone of [false, true]) {
+    const page = await mount(), validation = deferred();
+    let calls = 0;
+    page.api.updateProfile = page.api.changePhone = async () => { calls++; return profile; };
+    page.form.values.verificationProof = 'proof';
+    if (changePhone) page.form.values.phone = '010-9999-5678';
+    page.state.validation = validation.promise;
+    const pending = page.button().onPress();
+    page.state.proofValid = false;
+    validation.resolve(); await pending;
+    assert.equal(calls, 0);
+    assert.equal(page.notice(), null);
+    assert.equal(page.form.values.verificationProof, '');
+    assert.deepEqual(page.state.errors, ['proof-required']);
+    assert.equal(page.button().disabled, !changePhone);
   }
 });

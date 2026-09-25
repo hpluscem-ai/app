@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, nofollow">
+    <title>에이치플러스에코 서비스 약관 및 개인정보 안내</title>
+    <script>
+      const paths = new Map([
+        ['#terms', '/term'],
+        ['#privacy', '/privacy'],
+        ['#collection', '/collection'],
+        ['#marketing', '/marketing'],
+      ]);
+      window.location.replace(paths.get(window.location.hash) ?? '/term');
+    </script>
+  </head>
+  <body>
+    <a href="/term" style="text-decoration: none">이용약관</a>
+  </body>
+</html>

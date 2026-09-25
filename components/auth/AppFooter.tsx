@@ -3,6 +3,7 @@ import Svg, { Line } from 'react-native-svg';
 
 import { imageSources } from '../../constants/assets';
 import { colors, typography } from '../../constants/theme';
+import { LegalDocumentLink } from './LegalDocumentLink';
 
 export function AppFooter() {
   const divider = (
@@ -32,24 +33,26 @@ export function AppFooter() {
       {divider}
 
       <View style={styles.footerLegal}>
-        <Text style={styles.footerText}>이용약관</Text>
-        <Text style={styles.footerTextStrong}>개인정보처리방침</Text>
+        <LegalDocumentLink document="terms" style={styles.footerText}>
+          이용약관
+        </LegalDocumentLink>
+        <LegalDocumentLink document="privacy" style={styles.footerTextStrong}>
+          개인정보처리방침
+        </LegalDocumentLink>
         <View style={styles.footerGroup}>
           <Text style={styles.footerText}>고객센터</Text>
-          <Text style={styles.footerText}>전화번호 : 010-0000-0000</Text>
-          <Text style={styles.footerText}>
-            주중 09~18시 (점심시간 12~13시 30분 / 주말 및 공휴일 제외)
-          </Text>
+          <Text style={styles.footerText}>전화번호 : 1600-5072</Text>
+          <Text style={styles.footerText}>운영시간 : 확인 예정</Text>
         </View>
       </View>
 
       {divider}
 
       <View style={styles.footerGroup}>
-        <Text style={styles.footerText}>에이치플러스에코</Text>
+        <Text style={styles.footerText}>에이치플러스에코(주)</Text>
         <Text style={styles.footerText}>사업자등록번호 : 220-86-00404</Text>
-        <Text style={styles.footerText}>대표 : 홍길동</Text>
-        <Text style={styles.footerText}>개인정보처리담당자 : 홍길동</Text>
+        <Text style={styles.footerText}>대표 : 허자홍</Text>
+        <Text style={styles.footerText}>개인정보처리담당자 : 확인 예정</Text>
         <Text style={styles.footerText}>
           주소 : 서울시 송파구 석촌호수로 222 6~8층 (석촌동, 제이타워)
         </Text>

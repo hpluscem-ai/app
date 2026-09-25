@@ -12,9 +12,10 @@ const escapeHtml = (value) => value.replace(/[&<>"']/g, (char) => ({
 
 // Only the headings, tables, lists and inline markup used by the QA document.
 function inline(text) {
-  return text.split(/(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g).map((part) => {
+  return text.split(/(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\(https?:\/\/[^\s)]+\)|E\/A)/g).map((part) => {
     if (part.startsWith('`') && part.endsWith('`')) return `<code>${escapeHtml(part.slice(1, -1))}</code>`;
     if (part.startsWith('**') && part.endsWith('**')) return `<strong>${escapeHtml(part.slice(2, -2))}</strong>`;
+    if (part === 'E/A') return '<abbr title="E는 이메일, A는 휴대폰 번호">E/A</abbr>';
     const link = /^\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)$/.exec(part);
     if (link) return `<a href="${escapeHtml(link[2])}" target="_blank" rel="noopener noreferrer">${escapeHtml(link[1])}</a>`;
     return escapeHtml(part);
@@ -129,6 +130,7 @@ export function renderQa(markdown, audience = 'user') {
     h2 { margin-top: 12px; font-size: 20px; }
     li + li { margin-top: 8px; }
     a { color: inherit; text-decoration: none; }
+    abbr[title] { text-decoration: none; }
     code { font: inherit; overflow-wrap: anywhere; }
     .table-wrap { overflow-x: auto; }
     table { width: 100%; border-collapse: collapse; }

@@ -6,6 +6,7 @@ import { Controller, FormProvider, useForm } from 'react-hook-form';
 import { AppScreen } from '../components/AppScreen';
 import { CompanySelect } from '../components/auth/CompanySelect';
 import { FormTextField } from '../components/auth/FormTextField';
+import { LegalDocumentLink } from '../components/auth/LegalDocumentLink';
 import { PhoneVerificationSection } from '../components/auth/PhoneVerificationSection';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
 import { CheckSquareIcon } from '../components/icons/CheckSquareIcon';
@@ -46,7 +47,7 @@ type AgreementRowProps = {
   emphasized?: boolean;
   label: string;
   onPress: () => void;
-  showDetails?: boolean;
+  document?: 'terms' | 'collection' | 'marketing';
 };
 
 function AgreementRow({
@@ -55,7 +56,7 @@ function AgreementRow({
   emphasized = false,
   label,
   onPress,
-  showDetails = false,
+  document,
 }: AgreementRowProps) {
   return (
     <View style={styles.agreementRow}>
@@ -81,7 +82,11 @@ function AgreementRow({
           {label}
         </Text>
       </Pressable>
-      {showDetails ? <Text style={styles.detailsText}>보기</Text> : null}
+      {document ? (
+        <LegalDocumentLink document={document} style={styles.detailsText}>
+          보기
+        </LegalDocumentLink>
+      ) : null}
     </View>
   );
 }
@@ -414,7 +419,7 @@ export default function SignUpRoute() {
                       disabled={isSubmitting}
                       label="(필수)서비스 이용약관에 동의합니다."
                       onPress={() => onChange(!value)}
-                      showDetails
+                      document="terms"
                     />
                   )}
                   rules={{
@@ -430,7 +435,7 @@ export default function SignUpRoute() {
                       disabled={isSubmitting}
                       label="(필수) 개인정보 수집 및 이용에 동의합니다."
                       onPress={() => onChange(!value)}
-                      showDetails
+                      document="collection"
                     />
                   )}
                   rules={{
@@ -446,7 +451,7 @@ export default function SignUpRoute() {
                       disabled={isSubmitting}
                       label="(선택) 마케팅 수신에 동의합니다."
                       onPress={() => onChange(!value)}
-                      showDetails
+                      document="marketing"
                     />
                   )}
                 />
