@@ -9,7 +9,7 @@ const nodes = tree => !tree || typeof tree !== 'object' ? [] : [tree, ...[tree.p
 function load(path, imports) {
   const exports = {};
   const source = ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
-  new Function('require', 'exports', source)(name => { assert.ok(name in imports, `unexpected import ${name}`); return imports[name]; }, exports);
+  new Function('require', 'exports', 'localStorage', source)(name => { assert.ok(name in imports, `unexpected import ${name}`); return imports[name]; }, exports, imports.localStorage);
   return exports;
 }
 const api = load('../utils/mileageApi.ts', { './authApi': authApi });
@@ -41,6 +41,8 @@ function mount(path, extras = {}, params = {}, renderHistory = false) {
     '../../components/AuthProvider': { useAuth: () => auth },
     '../../components/NoticeModal': { NoticeModal: 'NoticeModal' },
     '../../components/mileage': { MileagePhotoForm: 'MileagePhotoForm', UploadCard: 'UploadCard' },
+    '../../constants/assets': { imageSources: { mileagePhotoGuide: 'guide.png' } },
+    '../../utils/mileagePhotoGuide': { hasConfirmedMileagePhotoGuide: () => true, confirmMileagePhotoGuide() {} },
     '../../components/mileage/UploadCard': { UploadCard: 'UploadCard' },
     '../../components/icons/MileageWaterJugIcon': { MileageWaterJugIcon: 'WaterJug' },
     '../../utils/authApi': authApi,
@@ -547,4 +549,53 @@ test('photo mode defaults to one, preserves both selections and ignores late pic
   toggle('1장'); assert.equal(cards()[0].image.uri, 'combined.jpg');
   formProps.locked = true; toggle('2장'); assert.equal(cards().length, 1);
   page.unmount();
+});
+
+test('first-use guide locks uploads, records only confirmation and stays dismissed across visits and users', () => {
+  let confirmed = false;
+  const extras = { '../../utils/mileagePhotoGuide': {
+    hasConfirmedMileagePhotoGuide: () => confirmed,
+    confirmMileagePhotoGuide: () => { confirmed = true; },
+  } };
+  const page = mount('../app/mileage/apply.tsx', extras);
+  assert.equal(page.get('NoticeModal').accessibilityLabel, '사진 등록 방법');
+  assert.equal(page.get('NoticeModal').visible, true);
+  assert.equal(page.get('MileagePhotoForm').locked, true);
+  page.get('MileagePhotoForm').onValidSubmit({});
+  assert.equal(page.preparations.length, 0);
+  const lateConfirm = page.get('NoticeModal').onConfirm;
+  page.blur(); lateConfirm(); assert.equal(confirmed, false);
+  page.focus(); assert.equal(page.get('NoticeModal').visible, true);
+  page.get('NoticeModal').onRequestClose(); assert.equal(confirmed, false);
+  page.blur(); page.focus(); page.get('NoticeModal').onConfirm();
+  assert.equal(confirmed, true); assert.equal(page.get('MileagePhotoForm').locked, false);
+  page.blur(); page.focus(); assert.equal(page.get('NoticeModal').visible, false);
+  page.auth.state.user.id = 'another-user'; assert.equal(page.get('NoticeModal').visible, false);
+  page.unmount();
+  const reopened = mount('../app/mileage/apply.tsx', extras);
+  assert.equal(reopened.get('NoticeModal').visible, false); reopened.unmount();
+});
+
+test('guide confirmation persists on web and native and storage failures do not block this run', () => {
+  for (const os of ['web', 'ios', 'android']) {
+    let stored = false, unavailable = false;
+    const imports = {
+      'react-native': { Platform: { OS: os } },
+      'expo-file-system': { Paths: { document: 'documents' }, File: class {
+        get exists() { if (unavailable) throw new Error('unavailable'); return stored; }
+        write(value) { if (unavailable) throw new Error('unavailable'); assert.equal(value, '1'); stored = true; }
+      } },
+      localStorage: {
+        getItem() { if (unavailable) throw new Error('unavailable'); return stored ? '1' : null; },
+        setItem(_key, value) { if (unavailable) throw new Error('unavailable'); assert.equal(value, '1'); stored = true; },
+      },
+    };
+    let guide = load('../utils/mileagePhotoGuide.ts', imports);
+    assert.equal(guide.hasConfirmedMileagePhotoGuide(), false); guide.confirmMileagePhotoGuide();
+    assert.equal(load('../utils/mileagePhotoGuide.ts', imports).hasConfirmedMileagePhotoGuide(), true);
+    stored = false; unavailable = true; guide = load('../utils/mileagePhotoGuide.ts', imports);
+    assert.equal(guide.hasConfirmedMileagePhotoGuide(), false);
+    assert.doesNotThrow(() => guide.confirmMileagePhotoGuide());
+    assert.equal(guide.hasConfirmedMileagePhotoGuide(), true);
+  }
 });

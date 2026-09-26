@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 
 import { colors, typography } from '../constants/theme';
 
@@ -9,6 +9,8 @@ type NoticeModalProps = {
   cancelLabel?: string;
   confirmLabel: string;
   message: string;
+  title?: string;
+  image?: { source: ImageSourcePropType; aspectRatio: number; accessibilityLabel: string };
   onConfirm: () => void;
   onCancel?: () => void;
   onRequestClose?: () => void;
@@ -26,6 +28,8 @@ export function NoticeModal(props: NoticeModalProps) {
     cancelLabel = '취소',
     confirmLabel,
     message,
+    title,
+    image,
     onConfirm,
     onCancel,
     onRequestClose = onCancel ?? onConfirm,
@@ -41,15 +45,24 @@ export function NoticeModal(props: NoticeModalProps) {
       transparent
       visible={visible}
     >
-      <View style={styles.overlay}>
+      <View style={[styles.overlay, image && styles.illustratedOverlay]}>
         <View
           accessibilityLabel={accessibilityLabel}
           accessibilityRole="alert"
           accessibilityViewIsModal
           onAccessibilityEscape={() => !disabled && onRequestClose()}
-          style={styles.card}
+          style={[styles.card, image && styles.illustratedCard]}
         >
-          <Text style={styles.message}>{message}</Text>
+          {image ? (
+            <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
+              {title ? <Text style={styles.title}>{title}</Text> : null}
+              <View style={{ width: '100%', aspectRatio: image.aspectRatio, flexShrink: 0 }}>
+                <Image source={image.source} accessibilityLabel={image.accessibilityLabel}
+                  resizeMode="contain" style={styles.image} />
+              </View>
+              <Text style={styles.message}>{message}</Text>
+            </ScrollView>
+          ) : <Text style={styles.message}>{message}</Text>}
           <View style={styles.actions}>
             <Pressable
               accessibilityRole="button"
@@ -110,6 +123,12 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 4,
   },
+  illustratedOverlay: { paddingVertical: 20 },
+  illustratedCard: { maxHeight: '100%' },
+  body: { width: '100%', flexGrow: 0, flexShrink: 1 },
+  bodyContent: { gap: 18 },
+  image: { ...StyleSheet.absoluteFill, width: '100%', height: '100%' },
+  title: { ...typography.suitSemiBold18, color: colors.gray800 },
   message: {
     ...typography.authBody,
     width: '100%',

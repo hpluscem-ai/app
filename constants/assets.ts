@@ -1,4 +1,5 @@
 export const imageSources = {
+  mileagePhotoGuide: require('../assets/mileage-photo-guide.png'),
   notFound404: require('../assets/404-3d.png'),
   hayan100Logo: require('../assets/hayan100-logo.png'),
   hayan100FooterLogo: require('../assets/hayan100-footer-logo.png'),
