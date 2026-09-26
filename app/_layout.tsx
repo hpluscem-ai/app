@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import * as Sentry from '@sentry/react-native';
 import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import { Stack, usePathname } from 'expo-router';
+import Head from 'expo-router/head';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as Updates from 'expo-updates';
@@ -13,6 +14,7 @@ import { AppBar } from '../components/AppBar';
 import { AuthProvider, useAuth } from '../components/AuthProvider';
 import { NoticeProvider } from '../components/NoticeProvider';
 import { typography, webAppFrame } from '../constants/theme';
+import { getWebMetadata } from '../constants/webMetadata';
 
 const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN?.trim();
 const sentryEnabled = !__DEV__ && Boolean(sentryDsn);
@@ -126,8 +128,16 @@ function RootNavigator() {
 }
 
 function RootLayout() {
+  const metadata = getWebMetadata(usePathname());
   return (
     <View style={[styles.root, Platform.OS === 'web' && webAppFrame]}>
+      {Platform.OS === 'web' && (
+        <Head>
+          <title>{metadata.title}</title>
+          <meta property="og:title" content={metadata.title} />
+          <meta property="og:url" content={metadata.url} />
+        </Head>
+      )}
       <AuthProvider>
         <NoticeProvider>
           <RootNavigator />

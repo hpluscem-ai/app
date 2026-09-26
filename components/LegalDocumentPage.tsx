@@ -1,5 +1,5 @@
 import Head from 'expo-router/head';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 
 import { legalDocuments, type LegalDocument } from '../constants/legalDocuments';
 import { colors, typography } from '../constants/theme';
@@ -11,7 +11,7 @@ export function LegalDocumentPage({ document }: { document: LegalDocument }) {
   return (
     <AppScreen variant="plain">
       <Head>
-        <title>{title}</title>
+        {Platform.OS !== 'web' && <title>{title}</title>}
         <meta name="robots" content="noindex, nofollow" />
       </Head>
       <View style={styles.content}>

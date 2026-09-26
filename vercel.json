@@ -1,6 +1,6 @@
 {
     "framework": null,
-    "buildCommand": "pnpm exec expo export --platform web",
+    "buildCommand": "pnpm exec expo export --platform web && node --experimental-strip-types scripts/export-web-metadata.mjs",
     "outputDirectory": "dist",
     "cleanUrls": true,
     "rewrites": [
