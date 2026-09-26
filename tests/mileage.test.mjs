@@ -576,6 +576,35 @@ test('first-use guide locks uploads, records only confirmation and stays dismiss
   assert.equal(reopened.get('NoticeModal').visible, false); reopened.unmount();
 });
 
+test('manual guide reopens after confirmation and blocks submission while visible', () => {
+  let confirmations = 0;
+  const page = mount('../app/mileage/apply.tsx', { '../../utils/mileagePhotoGuide': {
+    hasConfirmedMileagePhotoGuide: () => true,
+    confirmMileagePhotoGuide: () => { confirmations += 1; },
+  } });
+  assert.equal(page.get('NoticeModal').visible, false);
+  assert.equal(page.get('MileagePhotoForm').locked, false);
+
+  page.get('MileagePhotoForm').onOpenGuide();
+  assert.equal(page.get('NoticeModal').visible, true);
+  assert.equal(page.get('MileagePhotoForm').locked, true);
+  page.get('MileagePhotoForm').onValidSubmit({});
+  assert.equal(page.preparations.length, 0);
+  assert.deepEqual(page.navigation, []);
+
+  page.get('NoticeModal').onRequestClose();
+  assert.equal(page.get('NoticeModal').visible, false);
+  assert.equal(page.get('MileagePhotoForm').locked, false);
+  assert.equal(confirmations, 0);
+
+  page.get('MileagePhotoForm').onOpenGuide();
+  assert.equal(page.get('NoticeModal').visible, true);
+  assert.equal(page.get('MileagePhotoForm').locked, true);
+  assert.equal(page.preparations.length, 0);
+  assert.deepEqual(page.navigation, []);
+  page.unmount();
+});
+
 test('guide confirmation persists on web and native and storage failures do not block this run', () => {
   for (const os of ['web', 'ios', 'android']) {
     let stored = false, unavailable = false;

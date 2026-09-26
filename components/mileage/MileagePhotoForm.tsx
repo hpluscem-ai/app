@@ -30,6 +30,7 @@ type MileagePhotoFormProps = {
   existingImages?: { receipt: { uri: string } | null; dashboard: { uri: string } | null };
   onImageError?: () => void;
   onPreview?: (uri: string, title: string) => void;
+  onOpenGuide?: () => void;
   requirement: MileagePhotoRequirement;
   submitLabel: string;
 };
@@ -46,6 +47,7 @@ export function MileagePhotoForm({
   existingPhotoMode = 'separate',
   onImageError,
   onPreview,
+  onOpenGuide,
 }: MileagePhotoFormProps) {
   const {
     showImageSourceActions,
@@ -194,6 +196,14 @@ export function MileagePhotoForm({
               </Pressable>
             ))}
           </View>
+          {onOpenGuide ? (
+            <Pressable accessibilityRole="button" accessibilityLabel="예시 보기"
+              accessibilityState={{ disabled: locked }} disabled={locked}
+              onPress={() => { if (!lockedRef.current && focused.current) onOpenGuide(); }}
+              style={[styles.modeToggle, styles.modeOption]}>
+              <Text style={styles.modeLabel}>예시 보기</Text>
+            </Pressable>
+          ) : null}
         </View>
         <View style={styles.uploadRow}>
           {photoMode === 'single' ? (

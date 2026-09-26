@@ -74,6 +74,9 @@ export default function MileageApplyRoute() {
         <MileagePhotoForm
           fillAvailableSpace intro="적립 이미지 업로드" onValidSubmit={submit}
           onSelectionChange={resetSubmission} locked={busy || submitted.current || guideVisible}
+          onOpenGuide={() => {
+            if (active.current && !active.current.signal.aborted && !inFlight.current && !submitted.current && !notice) setGuideVisible(true);
+          }}
           requirement="both" submitLabel="사진등록"
         />
       </AppScreen>
