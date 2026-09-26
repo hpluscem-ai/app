@@ -40,7 +40,7 @@ function mount(path, extras = {}, params = {}, renderHistory = false) {
     '../../components/AppBar': { AppBar: 'AppBar' },
     '../../components/AuthProvider': { useAuth: () => auth },
     '../../components/NoticeModal': { NoticeModal: 'NoticeModal' },
-    '../../components/mileage/MileagePhotoForm': { MileagePhotoForm: 'MileagePhotoForm' },
+    '../../components/mileage': { MileagePhotoForm: 'MileagePhotoForm', UploadCard: 'UploadCard' },
     '../../components/mileage/UploadCard': { UploadCard: 'UploadCard' },
     '../../components/icons/MileageWaterJugIcon': { MileageWaterJugIcon: 'WaterJug' },
     '../../utils/authApi': authApi,
@@ -48,9 +48,10 @@ function mount(path, extras = {}, params = {}, renderHistory = false) {
     '../../utils/mileagePhotos': { prepareMileageResubmission: (selection, submissionVersion) => pending(preparations, { selection, submissionVersion }), prepareMileageSubmission: selection => pending(preparations, { selection }), mileagePhotoPreview: async blob => blob },
     ...extras,
   };
-  const route = load(path, imports).default;
+  const module = load(path, imports);
+  const route = module.default ?? module.MileagePhotoForm;
   const component = () => {
-    const tree = route();
+    const tree = route(extras.formProps);
     if (!renderHistory) return tree;
     const history = nodes(tree).find(node => node.type?.name === 'MileageHistory');
     return history.type(history.props);
@@ -474,10 +475,10 @@ test('photo preparation enforces format/size, converts only past thresholds, and
     'react-native': { Platform: { OS: 'ios' } }, './authApi': authApi,
   });
   const image = { uri: 'picker/original.jpg', fileName: 'original.jpg', mimeType: 'image/jpeg', fileSize: 10*1024*1024, width: 4096, height: 2048 };
-  const first = await photos.prepareMileageSubmission({ receipt: image, dashboard: image });
+  const first = await photos.prepareMileageSubmission({ photoMode: 'separate', receipt: image, dashboard: image });
   assert.equal(conversions.length, 0); assert.notEqual(first.receipt.uri, image.uri);
   first.dispose(); assert.equal(removed.length, 2); assert.ok(!removed.includes(image.uri));
-  const second = await photos.prepareMileageSubmission({ receipt: { ...image, fileSize: image.fileSize+1 }, dashboard: { ...image, height: 4097 } });
+  const second = await photos.prepareMileageSubmission({ photoMode: 'separate', receipt: { ...image, fileSize: image.fileSize+1 }, dashboard: { ...image, height: 4097 } });
   assert.equal(conversions.length, 2); assert.equal(conversions[0].resize, undefined);
   assert.deepEqual(conversions[1].resize, { height: 4096 });
   assert.deepEqual(conversions[0].options, { compress: .9, format: 'jpeg' });
@@ -487,13 +488,16 @@ test('photo preparation enforces format/size, converts only past thresholds, and
     assert.throws(() => photos.validateMileagePhoto(asset), { code });
   }
   assert.equal(photos.validateMileagePhoto({ ...image, fileSize: 50*1024*1024 }), 'image/jpeg');
-  const replacement = await photos.prepareMileageResubmission({ receipt: null, dashboard: image }, 'a'.repeat(64));
+  const replacement = await photos.prepareMileageResubmission({ photoMode: 'separate', receipt: null, dashboard: image }, 'a'.repeat(64));
   assert.equal(replacement.receipt, undefined); assert.equal(replacement.submissionVersion, 'a'.repeat(64));
   assert.equal(files.size, 1); replacement.dispose(); assert.equal(files.size, 0);
-  await assert.rejects(photos.prepareMileageResubmission({ receipt: null, dashboard: null }, 'a'.repeat(64)), { code: 'PHOTO_REQUIRED' });
-  await assert.rejects(photos.prepareMileageSubmission({ receipt: image, dashboard: null }), { code: 'PHOTO_REQUIRED' });
+  await assert.rejects(photos.prepareMileageResubmission({ photoMode: 'separate', receipt: null, dashboard: null }, 'a'.repeat(64)), { code: 'PHOTO_REQUIRED' });
+  await assert.rejects(photos.prepareMileageResubmission({ photoMode: 'single', receipt: null, dashboard: image }, 'a'.repeat(64)), { code: 'PHOTO_REQUIRED' });
+  const combined = await photos.prepareMileageSubmission({ photoMode: 'single', receipt: image, dashboard: null });
+  assert.equal(combined.meter, undefined); assert.equal(files.size, 1); combined.dispose();
+  await assert.rejects(photos.prepareMileageSubmission({ photoMode: 'separate', receipt: image, dashboard: null }), { code: 'PHOTO_REQUIRED' });
   failRender = true;
-  await assert.rejects(photos.prepareMileageSubmission({ receipt: image, dashboard: { ...image, width: 5000 } }), { code: 'PHOTO_PREPARATION_FAILED' });
+  await assert.rejects(photos.prepareMileageSubmission({ photoMode: 'separate', receipt: image, dashboard: { ...image, width: 5000 } }), { code: 'PHOTO_PREPARATION_FAILED' });
   assert.equal(files.size, 0, 'partial preparation must release the first copied photo');
 });
 
@@ -508,5 +512,39 @@ test('invalid dates close the filter before the existing error notice and keep a
   assert.equal(page.get('MileageFilterSheet').visible, false);
   assert.ok(nodes(page.render()).some(node => node.props?.accessibilityLabel === '최근 3개월, 최신순'));
   assert.equal(page.calls.length, 1, 'invalid dates must not issue a new query');
+  page.unmount();
+});
+
+
+test('photo mode defaults to one, preserves both selections and ignores late picker results after switching', async () => {
+  const submits = [], notices = [], picks = [];
+  const formProps = { intro: '적립 이미지 업로드', requirement: 'both', submitLabel: '사진등록', onValidSubmit: value => submits.push(value) };
+  const page = mount('../components/mileage/MileagePhotoForm.tsx', {
+    formProps,
+    'expo-image-picker': { launchImageLibraryAsync: () => { const pick = deferred(); picks.push(pick); return pick.promise; } },
+    '../../utils/alerts': { useAlerts: () => ({ showImageSourceActions: actions => actions.onLibrary(), showAuthErrorAlert: message => notices.push(message), showMileageImagesRequiredAlert: () => notices.push('both') }) },
+    '../../utils/mileagePhotos': { validateMileagePhoto: () => {} },
+    '../auth/PrimaryButton': { PrimaryButton: 'PrimaryButton' },
+    './UploadCard': { UploadCard: 'UploadCard' },
+  });
+  const cards = () => nodes(page.render()).filter(node => node.type === 'UploadCard').map(node => node.props);
+  const toggle = label => nodes(page.render()).find(node => node.props?.accessibilityLabel === label).props.onPress();
+  const pick = async (card, uri) => { card.onChoose(); picks.at(-1).resolve({ canceled: false, assets: [{ uri }] }); await page.flush(); };
+  assert.equal(cards().length, 1); assert.equal(cards()[0].kind, 'combined');
+  assert.equal(nodes(page.render()).find(node => node.props?.accessibilityLabel === '1장').props['aria-checked'], true);
+  page.get('PrimaryButton').onPress(); assert.equal(submits.length, 0); assert.equal(notices.length, 1);
+  await pick(cards()[0], 'combined.jpg');
+  toggle('2장'); assert.equal(cards().length, 2);
+  await pick(cards()[0], 'receipt.jpg');
+  await pick(cards()[1], 'meter.jpg');
+  page.get('PrimaryButton').onPress();
+  assert.equal(submits.at(-1).photoMode, 'separate'); assert.equal(submits.at(-1).dashboard.uri, 'meter.jpg');
+  toggle('1장'); assert.equal(cards()[0].image.uri, 'combined.jpg');
+  page.get('PrimaryButton').onPress(); assert.equal(submits.at(-1).photoMode, 'single'); assert.equal(submits.at(-1).dashboard, null);
+  cards()[0].onChoose(); toggle('2장');
+  picks.at(-1).resolve({ canceled: false, assets: [{ uri: 'late.jpg' }] }); await page.flush();
+  assert.equal(cards()[0].image.uri, 'receipt.jpg');
+  toggle('1장'); assert.equal(cards()[0].image.uri, 'combined.jpg');
+  formProps.locked = true; toggle('2장'); assert.equal(cards().length, 1);
   page.unmount();
 });

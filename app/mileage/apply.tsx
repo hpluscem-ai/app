@@ -4,7 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { AppScreen } from '../../components/AppScreen';
 import { useAuth } from '../../components/AuthProvider';
 import { NoticeModal } from '../../components/NoticeModal';
-import { MileagePhotoForm, type MileagePhotoSelection } from '../../components/mileage/MileagePhotoForm';
+import { MileagePhotoForm, type MileagePhotoSelection } from '../../components/mileage';
 import { getAuthErrorMessage } from '../../utils/authApi';
 import { createMileageApplication } from '../../utils/mileageApi';
 import { prepareMileageSubmission } from '../../utils/mileagePhotos';

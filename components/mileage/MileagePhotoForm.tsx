@@ -1,11 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, typography } from '../../constants/theme';
 import { useAlerts } from '../../utils/alerts';
 import { AuthApiError, getAuthErrorMessage } from '../../utils/authApi';
+import type { MileagePhotoMode } from '../../utils/mileageApi';
 import { validateMileagePhoto } from '../../utils/mileagePhotos';
 import { PrimaryButton } from '../auth/PrimaryButton';
 import { UploadCard, type UploadKind } from './UploadCard';
@@ -14,6 +15,7 @@ type ImageSource = 'camera' | 'library';
 type MileagePhotoRequirement = 'both' | 'atLeastOne';
 
 export type MileagePhotoSelection = {
+  photoMode: MileagePhotoMode;
   dashboard: ImagePicker.ImagePickerAsset | null;
   receipt: ImagePicker.ImagePickerAsset | null;
 };
@@ -24,6 +26,7 @@ type MileagePhotoFormProps = {
   onValidSubmit: (selection: MileagePhotoSelection) => void | Promise<void>;
   onSelectionChange?: () => void;
   locked?: boolean;
+  existingPhotoMode?: MileagePhotoMode;
   existingImages?: { receipt: { uri: string } | null; dashboard: { uri: string } | null };
   onImageError?: () => void;
   onPreview?: (uri: string, title: string) => void;
@@ -40,6 +43,7 @@ export function MileagePhotoForm({
   locked = false,
   onSelectionChange,
   existingImages,
+  existingPhotoMode = 'separate',
   onImageError,
   onPreview,
 }: MileagePhotoFormProps) {
@@ -55,12 +59,14 @@ export function MileagePhotoForm({
     showAuthErrorAlert,
   } = useAlerts();
 
+  const [photoMode, setPhotoMode] = useState<MileagePhotoMode>('single');
+  const [combinedImage, setCombinedImage] = useState<ImagePicker.ImagePickerAsset | null>(null);
   const [receiptImage, setReceiptImage] =
     useState<ImagePicker.ImagePickerAsset | null>(null);
   const [dashboardImage, setDashboardImage] =
     useState<ImagePicker.ImagePickerAsset | null>(null);
   const [showErrors, setShowErrors] = useState(false);
-  const [hidden, setHidden] = useState({ receipt: false, dashboard: false });
+  const [hidden, setHidden] = useState({ receipt: false, dashboard: false, combined: false });
   const pickerRevision = useRef(0);
   const focused = useRef(false);
   const lockedRef = useRef(locked);
@@ -105,7 +111,9 @@ export function MileagePhotoForm({
 
       validateMileagePhoto(asset);
       onSelectionChange?.();
-      if (kind === 'receipt') {
+      if (kind === 'combined') {
+        setCombinedImage(asset);
+      } else if (kind === 'receipt') {
         setReceiptImage(asset);
       } else {
         setDashboardImage(asset);
@@ -129,15 +137,18 @@ export function MileagePhotoForm({
 
   const submitImages = () => {
     if (lockedRef.current || !focused.current) return;
-    const hasRequiredImages =
-      requirement === 'both'
+    const needsBoth = requirement === 'both' || existingPhotoMode !== photoMode;
+    const hasRequiredImages = photoMode === 'single' ? Boolean(combinedImage) :
+      needsBoth
         ? Boolean(receiptImage && dashboardImage)
         : Boolean(receiptImage || dashboardImage);
 
     if (!hasRequiredImages) {
       setShowErrors(true);
 
-      if (requirement === 'both') {
+      if (photoMode === 'single') {
+        showAuthErrorAlert('영수증과 계기판이 함께 찍힌 사진을 등록해주세요.');
+      } else if (needsBoth) {
         showMileageImagesRequiredAlert();
       } else {
         showMileageAtLeastOneImageRequiredAlert();
@@ -148,9 +159,17 @@ export function MileagePhotoForm({
 
     setShowErrors(false);
     pickerRevision.current += 1;
-    void onValidSubmit({ dashboard: dashboardImage, receipt: receiptImage });
+    void onValidSubmit({ photoMode, dashboard: photoMode === 'single' ? null : dashboardImage, receipt: photoMode === 'single' ? combinedImage : receiptImage });
   };
 
+  const needsBoth = requirement === 'both' || existingPhotoMode !== photoMode;
+  const changeMode = (next: MileagePhotoMode) => {
+    if (lockedRef.current || next === photoMode) return;
+    pickerRevision.current += 1;
+    onSelectionChange?.();
+    setShowErrors(false);
+    setPhotoMode(next);
+  };
   const atLeastOneImageMissing = !receiptImage && !dashboardImage;
 
   return (
@@ -161,14 +180,35 @@ export function MileagePhotoForm({
       ]}
     >
       <View style={styles.uploadSection}>
-        <Text style={styles.intro}>{intro}</Text>
+        <View style={styles.introRow}>
+          <Text style={styles.intro}>{intro}</Text>
+          <View style={styles.modeToggle} accessibilityRole="radiogroup" accessibilityLabel="등록 사진 장수">
+            {(['single', 'separate'] as const).map(mode => (
+              <Pressable key={mode} accessibilityRole="radio"
+                accessibilityLabel={mode === 'single' ? '1장' : '2장'}
+                aria-checked={photoMode === mode}
+                accessibilityState={{ checked: photoMode === mode, disabled: locked }}
+                disabled={locked} onPress={() => changeMode(mode)} hitSlop={8}
+                style={[styles.modeOption, photoMode === mode && styles.modeSelected]}>
+                <Text style={styles.modeLabel}>{mode === 'single' ? '1장' : '2장'}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
         <View style={styles.uploadRow}>
+          {photoMode === 'single' ? (
+            <UploadCard kind="combined" error={showErrors && !combinedImage}
+              image={combinedImage ?? (existingPhotoMode === 'single' && !hidden.combined ? existingImages?.receipt ?? null : null)}
+              onChoose={() => chooseImage('combined')}
+              onRemove={() => { if (lockedRef.current) return; onSelectionChange?.(); setCombinedImage(null); setHidden(value => ({ ...value, combined: true })); }}
+              disabled={locked} onImageError={onImageError} onPreview={onPreview} />
+          ) : (<>
           <UploadCard
             error={
               showErrors &&
-              (requirement === 'both' ? !receiptImage : atLeastOneImageMissing)
+              (needsBoth ? !receiptImage : atLeastOneImageMissing)
             }
-            image={receiptImage ?? (!hidden.receipt ? existingImages?.receipt ?? null : null)}
+            image={receiptImage ?? (existingPhotoMode === 'separate' && !hidden.receipt ? existingImages?.receipt ?? null : null)}
             kind="receipt"
             onChoose={() => chooseImage('receipt')}
             onRemove={() => { if (lockedRef.current) return; onSelectionChange?.(); setReceiptImage(null); setHidden(value => ({ ...value, receipt: true })); }}
@@ -179,11 +219,11 @@ export function MileagePhotoForm({
           <UploadCard
             error={
               showErrors &&
-              (requirement === 'both'
+              (needsBoth
                 ? !dashboardImage
                 : atLeastOneImageMissing)
             }
-            image={dashboardImage ?? (!hidden.dashboard ? existingImages?.dashboard ?? null : null)}
+            image={dashboardImage ?? (existingPhotoMode === 'separate' && !hidden.dashboard ? existingImages?.dashboard ?? null : null)}
             kind="dashboard"
             onChoose={() => chooseImage('dashboard')}
             onRemove={() => { if (lockedRef.current) return; onSelectionChange?.(); setDashboardImage(null); setHidden(value => ({ ...value, dashboard: true })); }}
@@ -191,6 +231,7 @@ export function MileagePhotoForm({
             onImageError={onImageError}
             onPreview={onPreview}
           />
+          </>)}
         </View>
       </View>
 
@@ -219,7 +260,13 @@ const styles = StyleSheet.create({
     gap: 20,
     paddingHorizontal: 20,
   },
+  introRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 },
+  modeToggle: { flexDirection: 'row', flexShrink: 0, borderWidth: 1, borderColor: colors.gray200, borderRadius: 8, overflow: 'hidden' },
+  modeOption: { paddingHorizontal: 10, paddingVertical: 6 },
+  modeSelected: { backgroundColor: colors.gray100 },
+  modeLabel: { ...typography.suitMedium12, color: colors.gray800 },
   intro: {
+    flex: 1,
     ...typography.suitSemiBold18,
     color: colors.black,
   },

@@ -7,8 +7,7 @@ import { AppBar } from '../../components/AppBar';
 import { AppScreen } from '../../components/AppScreen';
 import { useAuth } from '../../components/AuthProvider';
 import { NoticeModal } from '../../components/NoticeModal';
-import { MileagePhotoForm, type MileagePhotoSelection } from '../../components/mileage/MileagePhotoForm';
-import { UploadCard } from '../../components/mileage/UploadCard';
+import { MileagePhotoForm, UploadCard, type MileagePhotoSelection } from '../../components/mileage';
 import { colors, typography } from '../../constants/theme';
 import { AuthApiError, getAuthErrorMessage } from '../../utils/authApi';
 import { formatMileageDate, getMileageApplication, getMileagePhoto, resubmitMileageApplication, type MileageDetail } from '../../utils/mileageApi';
@@ -58,7 +57,7 @@ export default function MileageStatusRoute() {
           return;
         }
         setDetail({ ...data, scope });
-        for (const kind of ['receipt', 'meter'] as const) {
+        for (const kind of (data.photoMode === 'single' ? ['receipt'] as const : ['receipt', 'meter'] as const)) {
           if (!data.photos[kind]) throw new AuthApiError('제출 사진을 확인할 수 없습니다.', 'PHOTO_UNAVAILABLE');
           const blob = await request(session => getMileagePhoto(id, kind, session, controller.signal));
           if (!current()) return;
@@ -66,7 +65,7 @@ export default function MileageStatusRoute() {
           if (!current()) { preview.dispose(); return; }
           owned.push(preview);
         }
-        setImages({ receipt: { uri: owned[0].uri }, dashboard: { uri: owned[1].uri } });
+        setImages({ receipt: { uri: owned[0].uri }, dashboard: { uri: (owned[1] ?? owned[0]).uri } });
       } catch (error) {
         if (current()) setNotice({ message: getAuthErrorMessage(error), action: error instanceof AuthApiError && error.status === 404 ? 'leave' : 'reload', controller, scope });
       }
@@ -141,6 +140,7 @@ export default function MileageStatusRoute() {
       <AppScreen showFooter={false} variant="plain">
         {rejected ? (
           <MileagePhotoForm key={`${scope}:${retry}`} fillAvailableSpace
+            existingPhotoMode={detail.photoMode}
             intro={detail.rejectionReason ?? ''} existingImages={images}
             onValidSubmit={submit} onSelectionChange={resetSubmission}
             requirement="atLeastOne" submitLabel="재등록" onImageError={imageError}
@@ -151,8 +151,8 @@ export default function MileageStatusRoute() {
             <View style={styles.uploadSection}>
               <Text style={styles.description}>심사 완료 전에는 사진을 수정할 수 없습니다.</Text>
               <View style={styles.uploadRow}>
-                <UploadCard emptyLabel="영수증 사진" error={false} image={displayedImages.receipt} kind="receipt" onImageError={imageError} onPreview={openPhoto} />
-                <UploadCard emptyLabel="계기판 사진" error={false} image={displayedImages.dashboard} kind="dashboard" onImageError={imageError} onPreview={openPhoto} />
+                <UploadCard emptyLabel="영수증 사진" error={false} image={displayedImages.receipt} kind={detail?.photoMode === 'single' ? 'combined' : 'receipt'} onImageError={imageError} onPreview={openPhoto} />
+                {detail?.photoMode !== 'single' && <UploadCard emptyLabel="계기판 사진" error={false} image={displayedImages.dashboard} kind="dashboard" onImageError={imageError} onPreview={openPhoto} />}
               </View>
             </View>
           </View>

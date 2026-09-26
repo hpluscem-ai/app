@@ -13,7 +13,7 @@ const originalEnv = { ...process.env };
 afterEach(() => { globalThis.fetch = originalFetch; process.env = { ...originalEnv }; });
 const id = '11111111-1111-4111-8111-111111111111';
 const item = { id, status: 'pending', submittedAt: '2026-09-22T00:00:00.000Z', decidedAt: null, mileageAmount: null, finalAmount: null, rejectionReason: null };
-const detail = { ...item, submissionVersion: 'a'.repeat(64), photos: { receipt: `/api/v1/mileage/applications/${id}/photos/receipt`, meter: `/api/v1/mileage/applications/${id}/photos/meter` } };
+const detail = { ...item, photoMode: 'separate', submissionVersion: 'a'.repeat(64), photos: { receipt: `/api/v1/mileage/applications/${id}/photos/receipt`, meter: `/api/v1/mileage/applications/${id}/photos/meter` } };
 
 test('summary uses the existing JSON contract and cookie or Bearer credentials, including a real zero', async () => {
   assert.equal(typeof api.getMileageSummary, 'function');
@@ -151,4 +151,19 @@ test('resubmission sends only selected photos with a separate key/version and ex
   globalThis.fetch = async () => assert.fail('invalid submissions cannot be sent');
   await assert.rejects(api.resubmitMileageApplication(id, { ...input, meter: undefined }, {}), { code: 'PHOTO_REQUIRED' });
   await assert.rejects(api.resubmitMileageApplication(id, { ...input, submissionVersion: '' }, {}), { code: 'INVALID_SUBMISSION_VERSION' });
+});
+
+
+test('combined submission uploads only one file and reads its mode from the server', async () => {
+  process.env.EXPO_PUBLIC_API_URL = 'http://localhost:8080';
+  globalThis.fetch = async (_url, options) => {
+    assert.equal(options.body.get('photoMode'), 'single');
+    assert.equal(options.body.get('meter'), null);
+    assert.equal(await options.body.get('receipt').text(), 'combined');
+    return Response.json({ ...detail, photoMode: 'single' }, { status: 201 });
+  };
+  const result = await api.createMileageApplication({ key: id, photoMode: 'single', receipt: { name: 'combined.jpg', file: new Blob(['combined']) } }, {});
+  assert.equal(result.photoMode, 'single');
+  globalThis.fetch = async () => Response.json({ ...detail, photoMode: 'invalid' });
+  await assert.rejects(api.getMileageApplication(id, {}), { code: 'INVALID_RESPONSE' });
 });

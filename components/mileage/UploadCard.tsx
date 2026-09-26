@@ -6,7 +6,7 @@ import { CloseIcon } from '../icons/CloseIcon';
 import { DashboardIcon } from '../icons/DashboardIcon';
 import { ReceiptIcon } from '../icons/ReceiptIcon';
 
-export type UploadKind = 'receipt' | 'dashboard';
+export type UploadKind = 'receipt' | 'dashboard' | 'combined';
 
 type UploadCardProps = {
   error: boolean;
@@ -21,6 +21,10 @@ type UploadCardProps = {
 };
 
 const uploadCopy = {
+  combined: {
+    placeholder: '영수증·계기판 사진 업로드',
+    selected: '영수증·계기판',
+  },
   receipt: {
     placeholder: '영수증 사진 업로드',
     selected: '요소수 영수증',
@@ -112,7 +116,7 @@ export function UploadCard({
           ]}
         >
           <View style={styles.iconSurface}>
-            {kind === 'receipt' ? <ReceiptIcon /> : <DashboardIcon />}
+            {kind !== 'dashboard' ? <ReceiptIcon /> : <DashboardIcon />}
           </View>
           <Text style={styles.placeholderText}>{label}</Text>
         </View>
@@ -142,7 +146,7 @@ export function UploadCard({
         ]}
       >
         <View style={styles.iconSurface}>
-          {kind === 'receipt' ? <ReceiptIcon /> : <DashboardIcon />}
+          {kind !== 'dashboard' ? <ReceiptIcon /> : <DashboardIcon />}
         </View>
         <Text style={styles.placeholderText}>{label}</Text>
       </Pressable>

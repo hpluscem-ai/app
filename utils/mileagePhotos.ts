@@ -5,7 +5,7 @@ import type { ImagePickerAsset } from 'expo-image-picker';
 import { Platform } from 'react-native';
 
 import { AuthApiError } from './authApi';
-import type { MileageResubmission, MileageSubmission, MileageUpload } from './mileageApi';
+import type { MileagePhotoMode, MileageResubmission, MileageSubmission, MileageUpload } from './mileageApi';
 
 const MAX_BYTES = 50 * 1024 * 1024;
 
@@ -32,16 +32,16 @@ function removeTemporary(uri: string) {
   }
 }
 
-type PhotoSelection = { receipt: ImagePickerAsset | null; dashboard: ImagePickerAsset | null };
+type PhotoSelection = { photoMode: MileagePhotoMode; receipt: ImagePickerAsset | null; dashboard: ImagePickerAsset | null };
 
 export async function prepareMileageSubmission(selection: PhotoSelection): Promise<MileageSubmission & { dispose: () => void }> {
-  if (!selection.receipt || !selection.dashboard) throw new AuthApiError('영수증과 계기판 사진을 모두 등록해주세요.', 'PHOTO_REQUIRED');
+  if (!selection.receipt || (selection.photoMode === 'separate' && !selection.dashboard)) throw new AuthApiError(selection.photoMode === 'single' ? '영수증과 계기판이 함께 찍힌 사진을 등록해주세요.' : '영수증과 계기판 사진을 모두 등록해주세요.', 'PHOTO_REQUIRED');
   const result = await prepareMileagePhotos(selection);
-  return { ...result, receipt: result.receipt!, meter: result.meter! };
+  return { ...result, receipt: result.receipt! };
 }
 
 export async function prepareMileageResubmission(selection: PhotoSelection, submissionVersion: string): Promise<MileageResubmission & { dispose: () => void }> {
-  if (!selection.receipt && !selection.dashboard) throw new AuthApiError('교체할 사진을 한 장 이상 선택해주세요.', 'PHOTO_REQUIRED');
+  if (!selection.receipt && (selection.photoMode === 'single' || !selection.dashboard)) throw new AuthApiError('교체할 사진을 한 장 이상 선택해주세요.', 'PHOTO_REQUIRED');
   return { ...await prepareMileagePhotos(selection), submissionVersion };
 }
 
@@ -95,8 +95,8 @@ async function prepareMileagePhotos(selection: PhotoSelection) {
   };
   try {
     const receipt = selection.receipt ? await prepare(selection.receipt, 'receipt') : undefined;
-    const meter = selection.dashboard ? await prepare(selection.dashboard, 'meter') : undefined;
-    return { key: randomUUID(), receipt, meter, dispose };
+    const meter = selection.photoMode === 'separate' && selection.dashboard ? await prepare(selection.dashboard, 'meter') : undefined;
+    return { key: randomUUID(), photoMode: selection.photoMode, receipt, meter, dispose };
   } catch (error) {
     dispose();
     if (error instanceof AuthApiError) throw error;

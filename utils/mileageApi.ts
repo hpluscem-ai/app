@@ -9,7 +9,9 @@ export type MileageApplication = {
   finalAmount: number | null;
   rejectionReason: string | null;
 };
+export type MileagePhotoMode = 'single' | 'separate';
 export type MileageDetail = MileageApplication & {
+  photoMode: MileagePhotoMode;
   submissionVersion: string;
   photos: { receipt: string | null; meter: string | null };
 };
@@ -26,8 +28,8 @@ export type MileageQuery = {
   cursor?: string;
 };
 export type MileageUpload = { uri: string; name: string; type: string; file?: Blob };
-export type MileageSubmission = { key: string; receipt: MileageUpload; meter: MileageUpload };
-export type MileageResubmission = { key: string; submissionVersion: string; receipt?: MileageUpload; meter?: MileageUpload };
+export type MileageSubmission = { key: string; photoMode: MileagePhotoMode; receipt: MileageUpload; meter?: MileageUpload };
+export type MileageResubmission = { key: string; photoMode: MileagePhotoMode; submissionVersion: string; receipt?: MileageUpload; meter?: MileageUpload };
 
 export function formatMileageDate(date: Date): string {
   return `${date.getFullYear()}. ${String(date.getMonth() + 1).padStart(2, '0')}. ${String(date.getDate()).padStart(2, '0')}`;
@@ -86,11 +88,13 @@ function detail(value: unknown, id?: string): MileageDetail {
   if (id && data.id !== id) return invalidResponse();
   const version = record(value).submissionVersion;
   if (typeof version !== 'string' || !/^[0-9a-f]{64}$/.test(version)) return invalidResponse();
+  const photoMode = record(value).photoMode ?? 'separate';
+  if (photoMode !== 'single' && photoMode !== 'separate') return invalidResponse();
   const photos = record(record(value).photos);
   for (const kind of ['receipt', 'meter'] as const) {
     if (photos[kind] !== null && photos[kind] !== `/api/v1/mileage/applications/${data.id}/photos/${kind}`) return invalidResponse();
   }
-  return { ...data, submissionVersion: version, photos: photos as MileageDetail['photos'] };
+  return { ...data, photoMode, submissionVersion: version, photos: photos as MileageDetail['photos'] };
 }
 
 // Multipart and protected image bodies need a different transport from the JSON-only auth API.
@@ -150,9 +154,10 @@ export async function getMileageApplication(id: string, session: SessionOptions,
   return detail(await mileageRequest(`/${applicationId(id)}`, session, { signal }), id);
 }
 
-function submissionBody(input: { key: string; receipt?: MileageUpload; meter?: MileageUpload }): FormData {
+function submissionBody(input: { key: string; photoMode?: MileagePhotoMode; receipt?: MileageUpload; meter?: MileageUpload }): FormData {
   const body = new FormData();
   body.append('idempotencyKey', applicationId(input.key));
+  if (input.photoMode) body.append('photoMode', input.photoMode);
   for (const kind of ['receipt', 'meter'] as const) {
     const photo = input[kind];
     if (!photo) continue;
