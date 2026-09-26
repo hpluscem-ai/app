@@ -82,7 +82,7 @@ export function useAlerts() {
     function showUnsupportedImageFormatAlert() {
       notify(
         '지원하지 않는 이미지 형식',
-        'JPG, PNG, HEIC 또는 HEIF 이미지를 선택해주세요.',
+        'JPG, PNG, HEIC, HEIF 또는 WebP 이미지를 선택해주세요.',
       );
     }
 

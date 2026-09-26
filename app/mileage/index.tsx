@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import DateTimePicker from '@expo/ui/community/datetime-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
@@ -12,7 +13,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -77,20 +77,6 @@ function formatLocalDate(date: Date) {
   const day = String(date.getDate()).padStart(2, '0');
 
   return `${year}. ${month}. ${day}`;
-}
-
-function formatDateInput(value: string) {
-  const digits = value.replace(/\D/g, '').slice(0, 8);
-
-  if (digits.length <= 4) {
-    return digits;
-  }
-
-  if (digits.length <= 6) {
-    return `${digits.slice(0, 4)}. ${digits.slice(4)}`;
-  }
-
-  return `${digits.slice(0, 4)}. ${digits.slice(4, 6)}. ${digits.slice(6)}`;
 }
 
 function getInitialCustomRange() {
@@ -356,12 +342,8 @@ function MileageHistory({
       <MileageFilterSheet
         customEndDate={customEndDate}
         customStartDate={customStartDate}
-        onChangeCustomEndDate={(value) => {
-          setCustomEndDate(formatDateInput(value));
-        }}
-        onChangeCustomStartDate={(value) => {
-          setCustomStartDate(formatDateInput(value));
-        }}
+        onChangeCustomEndDate={setCustomEndDate}
+        onChangeCustomStartDate={setCustomStartDate}
         onClose={() => {
           onQueryChange({ period, sort, startDate: customStartDate, endDate: customEndDate });
           Keyboard.dismiss();
@@ -405,7 +387,6 @@ function MileageFilterSheet({
 }) {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
-  const endDateRef = useRef<TextInput>(null);
   const progress = useRef(new Animated.Value(0)).current;
   const [mounted, setMounted] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -536,44 +517,73 @@ function MileageFilterSheet({
             </View>
             {period === 'custom' ? (
               <View style={styles.customDateRow}>
-                <TextInput
-                  accessibilityLabel="조회 시작일"
-                  autoComplete="off"
-                  keyboardType="number-pad"
-                  maxLength={12}
-                  onChangeText={onChangeCustomStartDate}
-                  onSubmitEditing={() => {
-                    endDateRef.current?.focus();
-                  }}
-                  placeholder="YYYY. MM. DD"
-                  placeholderTextColor={colors.gray400}
-                  returnKeyType="next"
-                  selectTextOnFocus
-                  style={styles.customDateInput}
-                  value={customStartDate}
-                />
+                <MileageDateField label="조회 시작일" onChange={onChangeCustomStartDate} value={customStartDate} />
                 <Text style={styles.customDateDivider}>~</Text>
-                <TextInput
-                  accessibilityLabel="조회 종료일"
-                  autoComplete="off"
-                  keyboardType="number-pad"
-                  maxLength={12}
-                  onChangeText={onChangeCustomEndDate}
-                  onSubmitEditing={Keyboard.dismiss}
-                  placeholder="YYYY. MM. DD"
-                  placeholderTextColor={colors.gray400}
-                  ref={endDateRef}
-                  returnKeyType="done"
-                  selectTextOnFocus
-                  style={styles.customDateInput}
-                  value={customEndDate}
-                />
+                <MileageDateField label="조회 종료일" onChange={onChangeCustomEndDate} value={customEndDate} />
               </View>
             ) : null}
           </View>
         </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
+  );
+}
+
+function MileageDateField({ label, onChange, value }: {
+  label: string;
+  onChange: (value: string) => void;
+  value: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [year, month, day] = value.split('. ').map(Number);
+  const date = new Date(year, month - 1, day);
+  const selectDate = (_event: unknown, nextDate: Date) => {
+    onChange(formatLocalDate(nextDate));
+    setOpen(false);
+  };
+
+  if (Platform.OS === 'web') {
+    return (
+      <input
+        aria-label={label}
+        onChange={(event) => onChange(event.currentTarget.value.replaceAll('-', '. '))}
+        onClick={(event) => event.currentTarget.showPicker?.()}
+        style={{
+          backgroundColor: colors.gray100,
+          border: 0,
+          borderRadius: 32,
+          boxSizing: 'border-box',
+          color: colors.gray800,
+          flex: 1,
+          fontFamily: typography.suitMedium14.fontFamily,
+          fontSize: typography.suitMedium14.fontSize,
+          height: 52,
+          minWidth: 0,
+          outline: 'none',
+          padding: '0 12px',
+          textAlign: 'center',
+        }}
+        type="date"
+        value={value.replaceAll('. ', '-')}
+      />
+    );
+  }
+
+  if (Platform.OS === 'ios') {
+    return (
+      <View style={styles.customDateInput}>
+        <DateTimePicker display="compact" mode="date" onValueChange={selectDate} value={date} />
+      </View>
+    );
+  }
+
+  return (
+    <>
+      <Pressable accessibilityLabel={label} accessibilityRole="button" onPress={() => setOpen(true)} style={styles.customDateInput}>
+        <Text style={styles.customDateText}>{value}</Text>
+      </Pressable>
+      {open ? <DateTimePicker mode="date" onDismiss={() => setOpen(false)} onValueChange={selectDate} style={styles.dateDialog} value={date} /> : null}
+    </>
   );
 }
 
@@ -913,15 +923,20 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   customDateInput: {
-    ...typography.suitMedium14,
     height: 52,
     flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderRadius: 32,
     backgroundColor: colors.gray100,
+  },
+  customDateText: {
+    ...typography.suitMedium14,
     color: colors.gray800,
-    paddingHorizontal: 12,
-    paddingVertical: 0,
     textAlign: 'center',
+  },
+  dateDialog: {
+    position: 'absolute',
   },
   customDateDivider: {
     ...typography.suitMedium14,

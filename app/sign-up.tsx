@@ -268,7 +268,7 @@ export default function SignUpRoute() {
                     keyboardType="email-address"
                     label="이메일"
                     onBlur={onBlur}
-                    onChangeText={onChange}
+                    onChangeText={(nextValue) => onChange(nextValue.replace(/\s/g, ''))}
                     onSubmitEditing={() => setFocus('password')}
                     placeholder="이메일을 입력해주세요."
                     textContentType="emailAddress"
@@ -378,7 +378,7 @@ export default function SignUpRoute() {
                     label="성함"
                     onBlur={onBlur}
                     onChangeText={(nextValue) =>
-                      onChange(formatName(nextValue))
+                      onChange(formatName(nextValue).replace(/\s/g, ''))
                     }
                     onSubmitEditing={() => setFocus('phone')}
                     placeholder="성함을 입력해주세요."

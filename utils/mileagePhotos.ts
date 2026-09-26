@@ -12,8 +12,8 @@ const MAX_BYTES = 50 * 1024 * 1024;
 export function validateMileagePhoto(asset: ImagePickerAsset): string {
   const extension = (asset.fileName ?? asset.uri.split(/[?#]/)[0]).split('.').pop()?.toLowerCase();
   const type = asset.mimeType?.toLowerCase() || (extension ? `image/${extension === 'jpg' ? 'jpeg' : extension}` : '');
-  if (!['image/jpeg', 'image/jpg', 'image/png', 'image/heic', 'image/heif'].includes(type)) {
-    throw new AuthApiError('JPG, PNG, HEIC 또는 HEIF 이미지를 선택해주세요.', 'UNSUPPORTED_PHOTO_TYPE');
+  if (!['image/jpeg', 'image/jpg', 'image/png', 'image/heic', 'image/heif', 'image/webp'].includes(type)) {
+    throw new AuthApiError('JPG, PNG, HEIC, HEIF 또는 WebP 이미지를 선택해주세요.', 'UNSUPPORTED_PHOTO_TYPE');
   }
   const size = asset.file?.size ?? asset.fileSize;
   if (!size || !Number.isSafeInteger(size) || size < 0) throw new AuthApiError('파일 용량을 확인할 수 없는 이미지는 등록할 수 없습니다.', 'PHOTO_SIZE_UNAVAILABLE');

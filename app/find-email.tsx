@@ -9,7 +9,7 @@ import { PrimaryButton } from '../components/auth/PrimaryButton';
 import { colors, typography } from '../constants/theme';
 import { usePhoneVerification } from '../hooks/usePhoneVerification';
 import { useAlerts } from '../utils/alerts';
-import { findEmail, getAuthErrorMessage } from '../utils/authApi';
+import { AuthApiError, findEmail, getAuthErrorMessage } from '../utils/authApi';
 
 type FindEmailFormValues = {
   phone: string;
@@ -56,7 +56,12 @@ export default function FindEmailRoute() {
     try {
       setResult(await findEmail(values));
     } catch (error) {
-      showAuthErrorAlert(getAuthErrorMessage(error));
+      showAuthErrorAlert(
+        getAuthErrorMessage(error),
+        error instanceof AuthApiError && error.code === 'ACCOUNT_NOT_FOUND'
+          ? () => form.reset()
+          : undefined,
+      );
     } finally {
       // A lookup consumes the proof even when no account matches.
       setValue('verificationProof', '');

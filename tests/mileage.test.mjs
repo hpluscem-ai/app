@@ -33,6 +33,7 @@ function mount(path, extras = {}, params = {}, renderHistory = false) {
     'expo-router': { useFocusEffect: fn => react.useEffect(() => focused ? fn() : undefined, [fn, focused]), useRouter: () => ({ push: url => navigation.push(url), replace: url => navigation.push(url) }), useLocalSearchParams: () => params, Stack: { Screen: 'Stack.Screen' }, Redirect: 'Redirect' },
     'react-native': native,
     'expo-linear-gradient': { LinearGradient: 'Gradient' },
+    '@expo/ui/community/datetime-picker': { default: 'DateTimePicker' },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0 }), SafeAreaProvider: 'SafeAreaProvider', SafeAreaView: 'SafeAreaView' },
     '../../constants/theme': { colors: {}, typography: {}, webAppFrame: {} },
     '../../components/AppScreen': { AppScreen: 'AppScreen' },
@@ -481,7 +482,8 @@ test('photo preparation enforces format/size, converts only past thresholds, and
   assert.deepEqual(conversions[1].resize, { height: 4096 });
   assert.deepEqual(conversions[0].options, { compress: .9, format: 'jpeg' });
   second.dispose(); assert.equal(removed.length, 4);
-  for (const [asset, code] of [[{ ...image, mimeType:'image/webp' }, 'UNSUPPORTED_PHOTO_TYPE'], [{ ...image, fileSize: 50*1024*1024+1 }, 'PHOTO_TOO_LARGE'], [{ ...image, fileSize: undefined }, 'PHOTO_SIZE_UNAVAILABLE'], [{ ...image, width: 0 }, 'INVALID_PHOTO']]) {
+  assert.equal(photos.validateMileagePhoto({ ...image, mimeType: 'image/webp' }), 'image/webp');
+  for (const [asset, code] of [[{ ...image, mimeType:'image/gif' }, 'UNSUPPORTED_PHOTO_TYPE'], [{ ...image, fileSize: 50*1024*1024+1 }, 'PHOTO_TOO_LARGE'], [{ ...image, fileSize: undefined }, 'PHOTO_SIZE_UNAVAILABLE'], [{ ...image, width: 0 }, 'INVALID_PHOTO']]) {
     assert.throws(() => photos.validateMileagePhoto(asset), { code });
   }
   assert.equal(photos.validateMileagePhoto({ ...image, fileSize: 50*1024*1024 }), 'image/jpeg');

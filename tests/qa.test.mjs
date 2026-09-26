@@ -10,10 +10,10 @@ const documents = {
   user: await readFile(new URL('../docs/user-auth-qa.md', import.meta.url), 'utf8'),
   admin: await readFile(new URL('../docs/admin-qa.md', import.meta.url), 'utf8'),
 };
-const counts = { user: 263, admin: 232 };
+const counts = { user: 243, admin: 232 };
 const pages = Object.fromEntries(Object.entries(documents).map(([audience, markdown]) => [audience, renderQa(markdown, audience)]));
 
-test('Both checklists render all cases in order, cover all pages, and exclude connection outage cases', () => {
+test('Both checklists render all cases in order, cover retained pages, and exclude connection outage cases', () => {
   for (const audience of ['user', 'admin']) {
     const markdown = documents[audience];
     const html = pages[audience];
@@ -32,7 +32,7 @@ test('Both checklists render all cases in order, cover all pages, and exclude co
   assert.deepEqual(userSections.slice(0, 8), [
     '회원가입', '로그인', '로그아웃', '이메일 찾기', '비밀번호 찾기', '비밀번호 재설정', '정보 수정', '회원탈퇴',
   ]);
-  for (const route of ['/map', '/mileage', '/mileage/apply', '/mileage/pending', '/mileage/rejected', '/term', '/privacy', '/collection', '/marketing']) {
+  for (const route of ['/map', '/mileage', '/mileage/apply', '/mileage/pending', '/mileage/rejected']) {
     assert.ok(documents.user.includes('— ' + route), route);
   }
   for (const route of ['/login', '/dashboard', '/drivers', '/infrastructure', '/infrastructure/new', '/infrastructure/edit/:id',

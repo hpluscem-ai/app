@@ -47,7 +47,7 @@
     "web": "expo start --web --port 4000",
     "qa": "node scripts/qa.mjs",
     "typecheck": "tsc --noEmit",
-    "test:auth": "node --experimental-strip-types --test tests/authApi.test.mjs tests/authSession.test.mjs"
+    "test:auth": "node --experimental-strip-types --test tests/authApi.test.mjs tests/authSession.test.mjs tests/findEmail.test.mjs"
   },
   "private": true
 }
