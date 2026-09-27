@@ -1,6 +1,6 @@
 # 하얀100 · H Plus Eco 기술 인수인계
 
-작성 기준: **2026-09-26 / 로컬 작업 트리**
+작성 기준: **2026-09-27 / 현재 코드와 배포 기록**
 
 대상: 앱·관리자 웹·API 서버를 이어서 개발하고 운영할 개발자
 
@@ -14,17 +14,17 @@
 | 구성 | 독립 저장소 3개: `hpluseco-app`, `hpluseco-admin`, `hpluseco-server`. 모노레포가 아니므로 설치·실행·커밋도 각각 수행한다. |
 | 앱 | React Native 네이티브 UI와 같은 코드의 웹 버전. Expo Router 사용. WebView 기반 앱이 아니다. |
 | 관리자 | 데스크톱 웹을 대상으로 한다. 회원·물류사·주유소·마일리지 심사·정산·대시보드 API가 연결돼 있다. |
-| 서버 | NestJS + SQLite. 로그인 세션, 사진 보관, OCR 작업, 승인과 정산을 서버가 관리한다. |
-| 최신 변경 | 사진 `1장 / 2장` 모드, `gpt-6-luna` OCR 전환, DB v11이 아래 앱·서버 커밋에 포함돼 있다. 실제 DB 적용·운영 활성화와는 별개다. |
-| 운영 준비 | 실제 DB 적용, 운영 배포, 은행 파일 수용·송금, 최신 네이티브 실기기 흐름은 별도 확인이 필요하다. |
+| 서버 | NestJS + Drizzle + PostgreSQL. 로그인 세션, 비공개 사진 보관, OCR 작업, 승인과 정산을 서버가 관리한다. |
+| 최신 변경 | 서버 `1c545c9`은 PostgreSQL과 Supabase Storage S3 연결로 전환돼 main에 배포됐다. 스키마는 빈 운영 `app` 스키마에 적용됐으며 기존 SQLite/R2 데이터 복사는 별도 작업이다. |
+| 운영 준비 | 운영 `DATABASE_URL`은 Supabase Session pooler(5432)여야 한다. 이전 배포에서는 Transaction pooler(6543) 설정으로 500이 발생했지만, 2026-09-27 04:22 KST 읽기 전용 확인에서는 API·문서·빈 물류사 목록이 200을 반환했다. 환경 변경 경위는 확인하지 못했으므로 실제 연결 주소와 재배포 이력은 별도로 대조한다. 은행 파일 수용·송금과 최신 네이티브 실기기 흐름도 별도 확인이 필요하다. |
 
 ### 작성 완료 전 최종 대조한 소스 기준
 
 | 저장소 | 브랜치 / HEAD | 작업 트리 |
 |---|---|---|
-| 앱 | `main` / `a5332df` | 구현 파일 변경 없음. 이번 인수인계 문서만 새 파일 |
-| 관리자 | `main` / `5447f0c` | 조사 시점 변경 없음 |
-| 서버 | `main` / `46fd32a` | 미추적 `scripts/test-luna-receipts.mjs` 존재. 내용·실행 상태는 이번 인수 문서의 검증 범위 밖 |
+| 앱 | `main` / `b2f1ff6` | 문서·정책 변경이 있으며 사용자 소유 변경은 보존한다. |
+| 관리자 | `main` / `92ad43d` | 반려 사유 입력 계약을 포함하지만 이 커밋의 원격 반영·배포는 별도 확인한다. |
+| 서버 | `main` / `1c545c9` | PostgreSQL·Supabase Storage 전환 커밋이 main에 배포됐다. 04:22 KST 읽기 전용 API 응답은 정상이나 Vercel DB URL의 실제 변경 여부는 확인하지 못했다. |
 
 이 표는 배포 버전이나 원격 저장소 동기화 여부를 뜻하지 않는다. 인수 직전에 각 저장소의 `git status --short`, `git log -1`, 배포된 커밋을 다시 대조한다. 기존 변경은 사용자 소유이므로 초기화하거나 덮어쓰지 않는다.
 
@@ -36,7 +36,7 @@
 hpluseco/
 ├── hpluseco-app/       기사 앱(iOS·Android·웹), 공통 QA 문서
 ├── hpluseco-admin/     관리자 데스크톱 웹
-└── hpluseco-server/    인증·업무 API, SQLite, 외부 서비스 연동
+└── hpluseco-server/    인증·업무 API, PostgreSQL·외부 서비스 연동
 ```
 
 ```mermaid
@@ -44,14 +44,14 @@ flowchart LR
   N[기사 네이티브 앱] -->|Bearer 세션| API[NestJS API]
   W[기사 웹] -->|기사 HttpOnly 쿠키| API
   A[관리자 웹] -->|관리자 HttpOnly 쿠키| API
-  API --> DB[(SQLite)]
-  API --> R2[비공개 R2 사진]
+  API --> DB[(PostgreSQL)]
+  API --> STORE[비공개 Supabase Storage]
   API --> SMS[SOLAPI 문자]
   API --> MAIL[Resend 메일]
   API --> OCR[OpenAI OCR]
 ```
 
-지도 화면은 네이티브에서 `react-native-maps`, 웹에서 네이버 Maps를 사용한다. 위치·목록 데이터는 기사 인증 API로 받는다. R2·문자·메일·OCR 비밀키를 클라이언트에 전달하지 않는다.
+지도 화면은 네이티브에서 `react-native-maps`, 웹에서 네이버 Maps를 사용한다. 위치·목록 데이터는 기사 인증 API로 받는다. Supabase S3 키·문자·메일·OCR 비밀키를 클라이언트에 전달하지 않는다.
 
 ### 기술 스택
 
@@ -61,7 +61,7 @@ flowchart LR
 |---|---|---|
 | 앱 | Expo `~57.0.13`, React Native `0.86.2`, React `19.2.3`, TypeScript `~6.0.3`, React Hook Form, React Native Paper | [package.json](../package.json), [app.json](../app.json) |
 | 관리자 | Vite `^8.2.0`, React `^19.2.8`, TypeScript `~6.0.2`, Oxlint, React Flow | [package.json](../../hpluseco-admin/package.json) |
-| 서버 | NestJS 11, TypeScript 5.7 계열, Node 내장 SQLite, Drizzle, Argon2, Jest, Supertest | [package.json](../../hpluseco-server/package.json) |
+| 서버 | NestJS 11, TypeScript 5.7 계열, PostgreSQL, Drizzle, postgres.js, Argon2, Jest, Supertest | [package.json](../../hpluseco-server/package.json) |
 
 서버의 명시된 Node 요구사항은 **22.13.0 이상**이다. 이번 조사 환경은 Node `22.17.0`, pnpm `10.33.0`이었다. 앱·관리자는 별도 Node 버전 고정이 없으므로 새 환경에서 각 도구의 호환성 검사를 수행한다. 각 저장소의 lockfile을 유지하고 의존성을 임의로 일괄 갱신하지 않는다.
 
@@ -81,7 +81,7 @@ flowchart LR
 
 ### 3.2 실행 명령
 
-각 명령은 표시된 저장소 루트에서 실행한다. 서버를 시작하면 DB 마이그레이션도 실행되므로 **인계받은 DB를 바로 연결하지 말고 DB 경로와 백업부터 확인**한다.
+각 명령은 표시된 저장소 루트에서 실행한다. 서버 시작은 DB 스키마를 만들거나 바꾸지 않는다. **인계받은 DB에는 먼저 백업·복원 절차를 확인하고, `DATABASE_MIGRATION_URL`로 명시적으로 `pnpm db:migrate`를 실행한다.**
 
 | 실행 위치 | 설치 | 실행 | 기본 접속 |
 |---|---|---|---|
@@ -127,7 +127,8 @@ flowchart LR
 |---|---|
 | `PORT` | 기본 8080 |
 | `NODE_ENV`, `VERCEL_ENV` | 운영 여부와 SMS 설정군 선택에 사용. 변수 지원이 특정 플랫폼 배포 완료를 의미하지는 않음 |
-| `DATABASE_PATH` | 기본 `data/hpluseco.sqlite`. 코드가 지원하지만 현재 예시 파일에는 없음. `:memory:`는 테스트 전용으로 사용 |
+| `DATABASE_URL` | 런타임 PostgreSQL 연결. Supabase는 TLS 인증서 검증을 사용하는 Session pooler(5432)를 사용하며 Transaction pooler(6543)는 사용할 수 없음 |
+| `DATABASE_MIGRATION_URL` | 명시적 스키마 적용 전용 Direct 또는 Session pooler 연결. `pnpm db:migrate`에 필요하며 런타임 URL을 대체하지 않음 |
 | `WEB_ORIGINS` | credential CORS와 웹 변경 요청 Origin 허용 목록 |
 | `ADMIN_SESSION_TTL_SECONDS` | 관리자 최대 유지기간. 승인 설정 28800초(8시간), 자동 연장 없음 |
 | `SOLAPI_API_KEY`, `SOLAPI_API_SECRET`, `SOLAPI_SENDER_PHONE` | 개발·로컬 문자 설정. 등록된 발신번호 사용 |
@@ -135,7 +136,7 @@ flowchart LR
 | `PHONE_VERIFICATION_SECRET` | 인증번호 HMAC 전용 비밀값. SOLAPI Secret과 별도 |
 | `RESEND_API_KEY`, `RESEND_FROM_EMAIL`, `RESEND_FROM_NAME` | 재설정 메일 공급자·발신 설정 |
 | `PASSWORD_RESET_URL` | 재설정 화면의 전체 URL. 서버가 token 쿼리를 추가. 실제 도메인·앱 링크 연결은 별도 검증 |
-| `R2_ACCOUNT_ID`, `R2_BUCKET_NAME`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | 기존 비공개 사진 버킷. 서버가 버킷을 만들지 않으며 미설정 시 사진 작업은 503 |
+| `SUPABASE_S3_ENDPOINT`, `SUPABASE_S3_REGION`, `SUPABASE_STORAGE_BUCKET`, `SUPABASE_S3_ACCESS_KEY_ID`, `SUPABASE_S3_SECRET_ACCESS_KEY` | Supabase Storage > S3의 비공개 버킷 연결. 서버가 버킷을 만들거나 공개로 바꾸지 않으며 누락·오류 시 사진 작업은 503 |
 | `OPENAI_API_KEY` | 현재 작업 트리의 OCR 공급자 키 |
 | `MILEAGE_OCR_ENABLED`, `MILEAGE_OCR_LUNA_DAILY_LIMIT` | OCR 실행 스위치와 양의 일일 요청 예산. 명시적 활성화·키·예산이 필요 |
 | `MILEAGE_OCR_AUTO_APPROVE_ENABLED` | 판독과 별도의 자동 승인 스위치. 정확히 `true`일 때만 활성화. 기본 비활성 |
@@ -177,7 +178,7 @@ flowchart LR
 | 경계 | 위치 | 책임 |
 |---|---|---|
 | 부팅 | [src/main.ts](../../hpluseco-server/src/main.ts), [src/app.setup.ts](../../hpluseco-server/src/app.setup.ts) | `.env`, `/api/v1`, CORS, 입력 검증, 오류 처리, Swagger |
-| DB | [src/database/](../../hpluseco-server/src/database/) | SQLite 연결, Drizzle 매핑, SQL 스키마·순차 마이그레이션 |
+| DB | [src/database/](../../hpluseco-server/src/database/) | PostgreSQL 연결, Drizzle 매핑, 명시적 SQL 마이그레이션 |
 | 기사 인증 | [src/auth/](../../hpluseco-server/src/auth/) | 계정·세션·목적별 SMS·복구·비밀번호 변경 |
 | 관리자 인증 | [src/admin-auth/](../../hpluseco-server/src/admin-auth/) | 별도 관리자 세션·역할 검사 |
 | 마일리지·사진·OCR | [src/mileage/](../../hpluseco-server/src/mileage/) | 신청·사진 저장·재등록·판독 작업·승인 조건·잔액 |
@@ -219,7 +220,7 @@ HTTP 상세 계약은 실행 중인 서버의 `/docs`와 각 controller·DTO가 
 - 같은 2장 모드에서는 교체한 사진만 보낸다. 2장→1장은 새 합본 사진, 1장→2장은 새 사진 두 장이 필요하다. 기존 사진을 다른 역할로 자동 전용하지 않는다.
 - 허용 사진은 JPEG·PNG·HEIC·HEIF·정적 WebP, 파일당 50 MiB 이하다. 서버는 실제 내용·디코딩·픽셀 수를 검사한다. 클라이언트 검증만 신뢰하지 않는다.
 - 클라이언트는 10 MiB 초과 또는 긴 변 4096px 초과 시 변환한다. 서버는 방향 보정·긴 변 4096px 이하·sRGB JPEG 품질 90으로 정규화하고 EXIF/GPS를 제거한다. 원본과 정규화본 모두 비공개 저장한다.
-- 사진은 권한 검사하는 API로 읽으며 공개 R2 URL을 사용하지 않는다. 네이티브 상세 미리보기는 메모리 URI를 사용한다.
+- 사진은 권한 검사하는 API로 읽으며 공개 Storage URL을 사용하지 않는다. 네이티브 상세 미리보기는 메모리 URI를 사용한다.
 - 수동 승인 입력은 `{ reviewVersion, finalAmount, liters }`다. 확정 금액은 0 이상의 안전 정수, 주유량은 정수 5자리·소수점 3자리 이내 십진 문자열이다. 서버가 금액·마일리지·결정 시각을 함께 저장한다.
 - **1리터 = 20마일리지, 1마일리지 = 1원**이다. 서버의 정확한 십진 계산으로 반올림하며 금액÷단가로 리터를 추정하지 않는다.
 - 최신 반려 요청은 `{ reviewVersion, rejectionReason }`를 받는다. 사유는 앞뒤 공백 제거 후 1~150자로 필수이며, 관리자 팝업의 자동 높이 textarea와 사유 칩 4개로 입력한다. 같은 버전·같은 사유만 재전송할 수 있고 다른 사유는 409로 기존 결정을 보존한다. 기존 DB 필드와 사용자 상세의 사진 위 사유 표시를 재사용한다.
@@ -229,9 +230,9 @@ HTTP 상세 계약은 실행 중인 서버의 `/docs`와 각 controller·DTO가 
 
 현재 코드는 `gpt-6-luna`에 사진 1~2장을 한 요청으로 보낸다. 좌우 반전이 명시적으로 감지될 때만 해당 이미지를 메모리에서 보정하고 최대 1회 추가 요청한다. 불확실한 통신 실패를 자동 재시도하지 않는다. 기존 CLOVA 호출은 최신 서버 변경에서 제거됐으며 과거 DB 열·증거는 보존한다.
 
-정상 판매, 명확한 필수값, 유효한 인쇄 거래 시각, 양쪽 전체 금액 일치, 명시된 계기판 리터, 중복 없음이 자동 승인 조건이다. 취소·재출력·외상·혼재·불확실·불일치·중복 의심을 자동 반려하지 않는다. 모든 회원의 이력을 기준으로 중복을 검사한다.
+2026-09-26 정정된 기획에 따라 읽힌 양쪽 금액 일치·유효한 계기판 리터·중복 없음이 자동 승인 조건이다. 전표 종류·재발행 여부·부가 안내·거래 시각 누락은 승인을 차단하지 않는다. 필수 숫자 판독 실패·불일치·중복 의심은 대기 처리한다. 모든 회원의 금액 두 값·거래 일시 전체 일치와 기존 사진 해시 중복을 검사하고, 별도로 같은 기사의 직전 현재 OCR 결과와 양쪽 금액이 같으면 대기 처리한다. 직전 결과는 완료 시각 순이며 실패 결과를 건너뛰어 더 오래된 금액을 비교하지 않는다.
 
-한국 시간대와 초 누락 해석은 미확정이다. 현재는 초와 시간대가 명시된 유효한 거래 시각만 자동 승인 근거로 삼으며 촬영·업로드 시간을 대신 넣지 않는다. 자동 승인에는 별도 활성화, 실제 정답 평가, 승인된 호출 예산 확인이 필요하다. 과거 완료 작업을 소급 승인하지 않는다.
+시간대 없는 국내 영수증은 한국 시간(+09:00)으로 정규화한다. 초 누락·잘못된 날짜/시간은 영수일시를 null로 두며 촬영·업로드 시간으로 보충하지 않는다. 이때도 필수 숫자가 읽히면 승인을 막지 않는다. 자동 승인은 환경 설정이 활성화돼야 하고, 과거 완료 작업을 소급 승인하지 않는다. 실제 유료 평가와 운영 데이터 재처리는 별도다.
 
 ### 6.4 정산·대시보드
 
@@ -260,7 +261,7 @@ HTTP 상세 계약은 실행 중인 서버의 `/docs`와 각 controller·DTO가 
 | 물류사·기사·주유소 | 관리자 조회·변경·비활성화/삭제 연결 | 격리 검사 기록. 복수 기기 편집·운영 상태 변경 범위는 별도 |
 | 관리자 기사 목록의 금액·마일리지 | 현재 두 열을 `-`로 표시 | 기사 목록 집계는 미연동. 사용자 본인의 누적 잔액 API와 구분 |
 | 기사 지도 | 실제 경계 조회·선택 상세·길안내 연결 | 네이버 타일 표시 과거 확인. 최신 클러스터·권한·TMAP 실기기 조합은 재확인 필요 |
-| 신청·목록·보호 사진·재등록·잔액 | 기사 API 연결 | 격리 DB/저장소 대역 검증. 실제 R2·실기기와 구분 |
+| 신청·목록·보호 사진·재등록·잔액 | 기사 API 연결 | [2026-09-27 통합 QA](qa-results-2026-09-27.md)에서 격리 PostgreSQL·실제 로컬 Supabase Storage 흐름을 확인했다. 운영 hosted Storage·실기기와 구분한다. |
 | 수동 승인·반려 | 관리자 UI·API 연결, 서버/관리자 커밋에 포함 | 9/26 임시 API·메모리 DB·실브라우저 승인·반려와 숫자 입력 검증 기록 |
 | 사진 1장/2장·Luna | 앱·서버 커밋에 포함, DB v11 필요 | 9/26 기록: 앱 관련 28개, 서버 단위 159개·통합 76개 및 격리 웹 검증. 해당 기록에서 유료 OCR·실기기·사용자 DB 적용은 미실행이며 이후 실제 호출 여부는 이번 작성에서 확인하지 않음 |
 | 자동 승인 | 트랜잭션 로직·스위치 존재 | 격리 검사와 실제 판독 정확도는 별개. 거래 시각 정책·평가·활성화 승인 남음 |
@@ -274,7 +275,7 @@ HTTP 상세 계약은 실행 중인 서버의 `/docs`와 각 controller·DTO가 
 
 ### 스키마의 기준
 
-`src/database/schema.sql`과 순차 SQL 마이그레이션이 실제 DDL이고, `schema.ts`는 Drizzle 매핑이다. `DatabaseService`가 부팅 중 `PRAGMA user_version`을 보고 필요한 마이그레이션을 적용한다. 별도 migration 실행 스크립트는 없다. `pnpm db`는 Drizzle Studio를 여는 명령이다.
+`drizzle/`의 SQL 마이그레이션이 실제 DDL이고, `src/database/schema.ts`는 Drizzle 매핑이다. `DatabaseService`는 런타임 `DATABASE_URL`로 연결만 하며 부팅 중 스키마를 변경하지 않는다. `DATABASE_MIGRATION_URL`을 설정한 뒤 `pnpm db:migrate`로 명시적으로 적용한다. 초기 마이그레이션은 빈 `app` 스키마를 대상으로 하며 SQLite 파일 데이터를 자동으로 가져오지 않는다.
 
 | 데이터 영역 | 주요 보존·변경 규칙 |
 |---|---|
@@ -284,16 +285,16 @@ HTTP 상세 계약은 실행 중인 서버의 `/docs`와 각 controller·DTO가 
 | 업로드 시도·OCR 작업 | 외부 저장 중단·판독 상태 추적. 재시작만으로 모든 실패가 자동 복구되는 것은 아님 |
 | 정산과 편입 항목 | 다운로드 스냅샷, 결과 증빙, 중복 완료 방지 |
 
-조사 시점 소스의 최신 버전은 **v11**이다. 주요 후반 변경은 v6 사진 업로드, v7 주소 통합, v8 정산 스냅샷, v9 OCR, v10 재등록, v11 사진 모드·보정 호출 예약이다. v11 소스 존재가 실제 DB 적용을 의미하지 않는다.
+현재 PostgreSQL 초기 마이그레이션은 기존 업무 스키마·제약·인덱스와 `app` 스키마 권한을 포함한다. 운영 빈 `app` 스키마에 적용됐다는 기록은 기존 SQLite 파일·R2 객체가 이전됐다는 뜻이 아니다.
 
 ### 인수 시 필요한 DB 확인
 
-1. 실제 `DATABASE_PATH`, 기동 계정, 파일 접근 권한, 현재 `user_version`을 확인한다.
-2. 스키마 변경 전 복구 가능한 백업과 복원 절차를 확인한다. WAL 사용 중인 DB는 본체 파일만 임의 복사한 것을 일관된 백업으로 간주하지 않는다.
-3. 복제한 격리 DB에서 변경 적용·이력 보존을 먼저 확인한다. 사용자 DB를 테스트 명령에 직접 연결하지 않는다.
-4. DB와 R2의 사진 참조를 함께 보존한다. 실패 정리는 미커밋 업로드 시도에 속한 객체만 대상으로 하고, 이미 신청에 연결된 객체를 삭제하지 않는다.
+1. 런타임 `DATABASE_URL`이 TLS 인증서 검증을 사용하는 Supabase Session pooler(5432)인지 확인한다. 포트 6543은 서버가 의도적으로 거부한다.
+2. 마이그레이션 전에 복구 가능한 PostgreSQL 백업과 복원 절차를 확인한다. 런타임 URL과 별도의 `DATABASE_MIGRATION_URL`을 사용한다.
+3. 복제한 격리 PostgreSQL DB에서 `pnpm db:migrate`와 이력 보존을 먼저 확인한다. 사용자 DB를 테스트 명령에 직접 연결하지 않는다.
+4. 기존 SQLite 데이터와 R2 객체를 이전할 때 DB 레코드·사진 참조·원본·정규화 객체를 함께 대조한다. 실패 정리는 미커밋 업로드 시도에 속한 객체만 대상으로 하고, 이미 신청에 연결된 객체를 삭제하지 않는다.
 
-현재 SQLite 구성은 한 서버 프로세스를 전제로 한다. 다중 인스턴스 배포·공유 파일시스템·서버리스 전환을 이미 지원한다고 가정하지 않는다. 사진 자동 삭제 작업과 확정 보관 기간은 없으며 백업 스케줄·복구 훈련·보존 정책은 운영 담당자에게 확인해야 한다.
+현재 PostgreSQL 연결은 서버 인스턴스 간 데이터를 공유한다. 다만 Vercel의 4.5 MB 요청 제한과 장기 실행 OCR worker 문제는 DB·저장소 전환만으로 해결되지 않으며 API 호스팅 이전 때 검증한다. 사진 자동 삭제 작업과 확정 보관 기간은 없으며 백업 스케줄·복구 훈련·보존 정책은 운영 담당자에게 확인해야 한다.
 
 ## 9. 개발 검증 방법
 
@@ -303,7 +304,7 @@ HTTP 상세 계약은 실행 중인 서버의 `/docs`와 각 controller·DTO가 
 |---|---|---|
 | 앱 | `pnpm typecheck`, `pnpm test:auth` | 전체 자동 검사 `node --experimental-strip-types --test tests/*.test.mjs` |
 | 관리자 | `pnpm build`, `pnpm lint` | `node --test tests/*.test.mjs` — 별도 package test 스크립트는 없음 |
-| 서버 | `pnpm exec tsc --noEmit`, `pnpm exec jest --runInBand --watchman=false` | `pnpm exec jest --config test/jest-e2e.json --runInBand --watchman=false`, `pnpm build` |
+| 서버 | `pnpm exec tsc --noEmit`, `pnpm exec jest --runInBand --watchman=false` | `TEST_DATABASE_URL`을 둔 `pnpm exec jest --config test/jest-e2e.json --runInBand --watchman=false`, `pnpm build` |
 | 모든 저장소 | `git diff --check` | 변경 파일과 기존 작업 트리 구분 |
 
 서버 `pnpm lint`와 `pnpm format`은 각각 `--fix`·`--write`로 소스를 변경한다. 확인만 할 때는 `pnpm exec eslint <변경한 파일>`처럼 자동 수정 없는 명령을 사용한다.
@@ -312,7 +313,7 @@ Expo 의존성·설정 변경 시 `pnpm exec expo install --check`, `pnpm exec e
 
 앱 전체 검사에는 loopback 포트를 여는 QA 서버 검사가 포함된다. 제한 환경의 `listen EPERM`은 기능 통과가 아니라 실행 환경 제한으로 기록한다. 자동 계약 검사와 API 대역 검사는 실제 브라우저·실기기 QA를 대체하지 않는다.
 
-수동 QA는 [사용자 QA](user-auth-qa.md), [관리자 QA](admin-qa.md)를 참조한다. 체크는 브라우저 localStorage에 저장되며 공유된 중앙 결과가 아니다. 해당 문서 일부에는 수동 승인·사진 확대를 구현 전으로 적은 과거 설명이 남아 있다. 실제 실행 전 최신 코드·정책과 대조하고, 예전 체크를 새 기능 검증으로 승계하지 않는다.
+수동 QA는 [사용자 QA](user-auth-qa.md), [관리자 QA](admin-qa.md)를 참조한다. 2026-09-27의 실제 실행 결과와 미수정 문제는 [통합 QA 결과](qa-results-2026-09-27.md)에 기록했다. 개별 체크는 브라우저 localStorage에 저장되는 이력이라 일괄 통과로 바꾸지 않으며, 해당 문서의 과거 설명도 당시 근거로 보존한다.
 
 ## 10. 빌드·배포와 장애 확인
 
@@ -322,7 +323,7 @@ Expo 의존성·설정 변경 시 `pnpm exec expo install --check`, `pnpm exec e
 |---|---|---|
 | 사용자 웹 | Expo export, `public/index.html`의 OG, 공개 주소로 기록된 `https://www.hayan100.kr/` | 실제 호스팅·배포 명령·환경변수·SPA 경로 처리·배포 커밋·API 연결 |
 | 관리자 웹 | Vite build, `vercel.json`의 `/api/v1/admin/:path*` → `https://api.hayan100.kr/api/v1/admin/:path*` rewrite와 SPA fallback | Vercel 프로젝트·관리자 실제 도메인·쿠키/Origin·운영 배포 상태 |
-| 서버 | `pnpm build` → `pnpm start:prod` (`node dist/main`) | 호스트·프로세스 관리자·TLS·영속 DB 경로·백업·환경 설정·배포 및 복구 담당자 |
+| 서버 | `pnpm build` → `pnpm start:prod` (`node dist/main`), Vercel 배포 기록 | Supabase Session pooler 5432·TLS·`DATABASE_MIGRATION_URL`·S3 Storage 환경 변수·백업·호스팅 이전 및 복구 담당자 |
 | 네이티브 | EAS project ID·업데이트 URL·`runtimeVersion: appVersion` | `eas.json` 없음. 빌드 프로필·앱 식별자·서명·스토어 계정·배포 이력·실기기 검증 |
 | 오류 수집 | Sentry 초기화와 Metro 설정 | 실제 프로젝트·DSN·소스맵 업로드·이벤트 수신·알림 담당자 |
 
@@ -338,7 +339,7 @@ DB는 기동 시 자동 변경되므로 코드만 이전 버전으로 되돌리�
 | 네이티브 API 연결 실패 | `EXPO_PUBLIC_API_URL`, 기기에서 접근 가능한 LAN 주소, 같은 네트워크, 서버 포트 |
 | 저장된 세션 확인 실패 | `/auth/me` 응답. 401 세션 오류와 500·네트워크 오류를 구분 |
 | 주유소 지도에 항목이 없음 | 세션, 경계 조회 응답, 유효 좌표·활성 조건. 웹은 네이버 Client ID·허용 URL도 확인 |
-| 사진 업로드·열람 503 | R2 구성/권한, 객체 상태, 처리 동시성 제한, `mileage_upload_attempts`와 서버 로그 |
+| 사진 업로드·열람 503 | Supabase S3 endpoint·region·bucket·서버 전용 키, 객체 상태, 처리 동시성 제한, `mileage_upload_attempts`와 서버 로그 |
 | OCR이 실행되지 않음 | 스위치·키·일일 예산, OCR job 상태·판독기 버전. 무조건 재호출하지 않음 |
 | 사진은 일치하는데 자동 승인 안 됨 | 별도 자동 승인 스위치, 거래 시각·필수값·중복·현재 버전·정산 편입 여부 |
 | 심사·재등록 409 | 최신 `reviewVersion` / `submissionVersion`, 이미 처리된 결정·정산 편입. 새 상세를 조회 |
@@ -351,11 +352,11 @@ DB는 기동 시 자동 변경되므로 코드만 이전 버전으로 되돌리�
 
 | 순서 | 작업 | 완료 판단 |
 |---|---|---|
-| 1 | 사진 모드·Luna·v11의 인계·배포 범위 확인 | 위 앱·서버 커밋의 원격 반영·배포 여부와 검증 결과 확보, 미추적 시험 스크립트의 처리 범위 확인 |
-| 2 | 저장소·호스팅·도메인·EAS·Sentry·SOLAPI·Resend·R2·OpenAI 접근 권한 인계 | 담당자와 권한·비밀값 전달 경로 확인. 비밀값은 문서에 기재하지 않음 |
-| 3 | 운영 서버·DB·백업·배포 절차 확정 | 실제 배포 커밋·DB 버전·복원 가능한 백업·배포/복구 책임자 확인 |
+| 1 | PostgreSQL·Supabase Storage 전환의 운영 설정 확인 | `DATABASE_URL` 5432, `DATABASE_MIGRATION_URL`, S3 Storage 다섯 변수, Vercel 재배포와 API 응답을 확인 |
+| 2 | 저장소·호스팅·도메인·EAS·Sentry·SOLAPI·Resend·Supabase·OpenAI 접근 권한 인계 | 담당자와 권한·비밀값 전달 경로 확인. 비밀값은 문서에 기재하지 않음 |
+| 3 | 운영 서버·DB·백업·배포 절차 확정 | 실제 배포 커밋·마이그레이션 이력·복원 가능한 백업·배포/복구 책임자 확인 |
 | 4 | 최신 코드로 사용자·관리자 교차 QA | 신청→판독/수동 심사→잔액→정산, 반려→사진 교체 재등록을 격리 환경에서 확인 |
-| 5 | 실제 공급자·실기기 검증 | 승인된 예산·계정·테스트 자료로 R2·SMS·메일·OCR와 iOS·Android 흐름 확인 |
+| 5 | 실제 공급자·실기기 검증 | 승인된 예산·계정·테스트 자료로 Supabase Storage·SMS·메일·OCR와 iOS·Android 흐름 확인 |
 | 6 | OCR 거래 시간대·초 누락 정책과 정답 평가 | 자동 승인 오판정 기준을 확정하고 활성화 여부를 별도 승인 |
 | 7 | 은행 정산·지급일·운영 절차 | 실제 파일 수용 및 결과 반영 확인, 지급일 결정. 실제 송금은 별도 운영 행위 |
 | 8 | 약관·개인정보·사진/탈퇴 이력 보관 정책 | 초안을 확정본으로 교체하고 담당자·보관기간 확인 |
@@ -363,9 +364,8 @@ DB는 기동 시 자동 변경되므로 코드만 이전 버전으로 되돌리�
 
 ### 확인된 문서 불일치
 
-- 앱 개발 기록과 QA에는 당시의 ‘승인 API 미구현’, ‘누적·재등록 미연동’, ‘네이티브 확대 미구현’ 설명이 일부 남아 있다. 최신 정책과 9/26 구현 기록을 우선 확인한다.
-- 서버 README의 신청 API 서두는 사진 두 장 필수로 설명하지만 하단과 현재 작업 트리는 `photoMode=single|separate`를 구현한다.
-- 서버 README OCR 설명에 과거 CLOVA 예산 변수명이 남아 있지만 현재 작업 트리의 활성 조건은 OpenAI 키와 Luna 일일 예산이다.
+- 과거 개발 기록과 QA에는 당시의 SQLite·R2·미구현 승인 API 설명이 남아 있다. 해당 날짜의 검증 근거로 보존하되 현재 계약으로 해석하지 않는다.
+- 최신 서버 README와 `.env.example`은 PostgreSQL Session pooler(5432), 명시적 마이그레이션, Supabase Storage S3 연결을 기준으로 한다.
 - 정적 ERD와 과거 기획·계획 문서는 실제 DB 마이그레이션 적용 상태를 증명하지 않는다.
 
 이 문서 작성에서는 원본 정책·개발 기록·QA·구현 파일을 수정하지 않았다. 과거 문서를 정리할 때에는 검증 이력을 삭제하지 않고 날짜와 적용 범위를 분명히 한다.

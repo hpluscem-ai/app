@@ -179,3 +179,15 @@ QA-09의 같은 공유 쿠키 구조는 탈퇴·새 사진 신청에도 적용�
 | 4096×4096 → 2048×2048 | 36,872,893 → 6,764,965 bytes (81.7% 감소) | 779.6 → 431.1MiB |
 
 두 경우 모두 5건이 완료됐다. 별도 좌우 반전 시나리오도 5건 완료·호출 6회·재판독 예약 1회였고 모든 전송 사진은 2048×1024였다. 위 수치는 합성 사진과 대역 응답을 사용한 워커 측정이며 실제 영수증 판독 정확도·실제 Storage I/O·동시 업로드 디코딩을 포함한 운영 메모리 보장은 아니다. 유료 OCR 호출·커밋·운영 배포는 수행하지 않았다. [측정 결과](/tmp/hpluseco-qa01-verification/resize-payload/summary.json) · [재현 코드](/tmp/hpluseco-qa01-verification/resize-payload/verify.cjs).
+
+## QA-02 운영 어드민 배포 — 2026-09-27
+
+사용자 승인으로 어드민 `92ad43d`(`feat(receipts): add rejection reason controls`)를 원격 `main`에 push하고 기존 Vercel Git 연동으로 운영 배포했다. 배포 전 운영 번들은 `index-CgBkulm-.js`로 반려 사유 계약이 없었으며, 원격 main은 `3f3e390`이었다. 배포 후 GitHub의 Vercel 상태는 `success / Deployment has completed`이고 운영 `https://admin.hayan100.kr/receipts`는 `index-uVMkgnFo.js`를 제공한다. 이 파일은 로컬에서 검증한 프로덕션 빌드와 바이트 단위로 동일하다(SHA-256 `f0cd822ec10595e42256ac2082575c1ba4dede120d7ec941fc3858606e84ae60`). 서버의 필수 `reviewVersion`·`rejectionReason` 계약과 일치하므로 QA-02의 배포 불일치는 해소했다.
+
+반려 관련 테스트 18/18, 린트·프로덕션 빌드 통과. 운영 Chrome 화면에서 반려 사유 입력창·네 가지 사유 선택·빈 사유 제출 차단과 안내 문구를 확인했다. `금액 불일치` 선택 시 textarea에 사유가 채워졌고, 취소 후 해당 신청은 `대기`를 유지했다. 운영 도메인의 비인증 관리자 API는 401로 보호된다. 실제 운영 신청의 반려 확정·DB 변경은 실행하지 않았다. 서버 배포·서버 DB 마이그레이션도 이번 범위에 포함하지 않았다.
+
+Vercel CLI에 로그인된 계정은 배포 소유 팀 `white102`를 조회할 수 없으므로 운영 런타임 로그는 확인하지 못했다. 배포 성공 근거는 GitHub Vercel 완료 상태, 실제 운영 HTTP 응답·새 번들 일치, 브라우저 UI 검증이다. [배포 결과](https://vercel.com/white102/admin/2WB3m7pNUkqKozfL4W5DRzzQ1j2V) · [검증 전후 증거](/tmp/hpluseco-qa02-deploy/production-after.json) · [운영 반려 입력창](/tmp/hpluseco-qa02-deploy/production-rejection-form.png).
+
+## QA-03 처리 보류 — 2026-09-27
+
+사용자는 정상 사용에서는 드문 비정상 JSON 요청에 대한 오류 분류 문제임을 확인한 뒤, 즉시 수정하지 않고 Sentry 연동 후 발생 상황을 관찰해 대응하기로 했다. QA-03은 해결 완료가 아닌 보류이며 현재의 500 응답 분류는 유지한다. 이 결정 기록만으로 Sentry 설치·연동·알림 설정이 완료된 것은 아니다.
