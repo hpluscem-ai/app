@@ -752,6 +752,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   balanceCard: {
+    ...(Platform.OS === 'web' ? { backdropFilter: 'blur(5px)' } : {}),
     width: '100%',
     minHeight: 146,
     flexDirection: 'row',
