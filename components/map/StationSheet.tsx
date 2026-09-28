@@ -394,8 +394,8 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   handleButton: {
-    width: 64,
-    height: 4,
+    width: '100%',
+    height: 6,
     alignSelf: 'center',
   },
   handle: {
