@@ -41,8 +41,9 @@ export function AppFooter() {
         </LegalDocumentLink>
         <View style={styles.footerGroup}>
           <Text style={styles.footerText}>고객센터</Text>
-          <Text style={styles.footerText}>전화번호 : 1600-5072</Text>
-          <Text style={styles.footerText}>운영시간 : 확인 예정</Text>
+          <Text style={styles.footerText}>전화번호 : 02-2037-7724</Text>
+          <Text style={styles.footerText}>운영시간 : 평일 09:00 ~ 18:00</Text>
+          <Text style={styles.footerText}>이메일 : kmpark@hpluseco.co.kr</Text>
         </View>
       </View>
 
@@ -52,9 +53,11 @@ export function AppFooter() {
         <Text style={styles.footerText}>에이치플러스에코(주)</Text>
         <Text style={styles.footerText}>사업자등록번호 : 220-86-00404</Text>
         <Text style={styles.footerText}>대표 : 허자홍</Text>
-        <Text style={styles.footerText}>개인정보처리담당자 : 확인 예정</Text>
         <Text style={styles.footerText}>
-          주소 : 서울시 송파구 석촌호수로 222 6~8층 (석촌동, 제이타워)
+          개인정보처리담당자 : 에이치플러스에코(주) 화학영업팀
+        </Text>
+        <Text style={styles.footerText}>
+          주소 : 서울특별시 송파구 석촌호수로 222(석촌동, 제이타워 6층)
         </Text>
         <Text style={styles.footerText}>
           Copyright © 2021 H-Plus Eco. All Rights Reserved.
