@@ -120,6 +120,8 @@ export function MapCanvas({ ref, ...props }: MapCanvasProps) {
             right: 0,
             bottom: latest.current.bottomPadding,
           },
+          logoControlOptions: { position: maps.Position.TOP_LEFT },
+          mapDataControlOptions: { position: maps.Position.TOP_RIGHT },
           scaleControl: false,
           mapTypeControl: false,
           zoomControl: false,
