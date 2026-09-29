@@ -301,12 +301,11 @@ export async function changePhone(
 }
 
 export async function requestMyPasswordResetEmail(
-  input: { phone: string; verificationProof: string },
   session: SessionOptions,
 ) {
   const data = await request('/auth/me/password-reset-emails', {
     ...session,
-    body: { phone: input.phone, verificationProof: input.verificationProof },
+    method: 'POST',
     expectedStatus: 200,
   });
   return { email: stringField(data, 'email') };

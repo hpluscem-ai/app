@@ -117,7 +117,6 @@ export default function MyPageRoute() {
     control,
     formState: { errors },
     handleSubmit,
-    getValues,
     reset,
     setFocus,
     setValue,
@@ -162,24 +161,16 @@ export default function MyPageRoute() {
   const requestPasswordResetLink = async () => {
     const focus = activeFocus.current;
     if (!focus || !profile || formRequestInFlight.current || accountRequestInFlight.current) return;
-    const values = getValues();
-    if (values.phone !== profile.phone || !isProofValid(values)) {
-      setValue('verificationProof', '');
-      showPhoneVerificationRequiredAlert();
-      return;
-    }
     formRequestInFlight.current = true;
     setIsSendingResetLink(true);
     try {
-      const { email } = await request((session) => requestMyPasswordResetEmail(values, session));
+      const { email } = await request(requestMyPasswordResetEmail);
       if (activeFocus.current !== focus) return;
       setNotice({ email, type: 'password-reset-sent' });
     } catch (error) {
       if (activeFocus.current === focus) showAuthErrorAlert(getAuthErrorMessage(error));
     } finally {
       if (activeFocus.current === focus) {
-        setValue('verificationProof', '');
-        resetVerification();
         formRequestInFlight.current = false;
         setIsSendingResetLink(false);
       }

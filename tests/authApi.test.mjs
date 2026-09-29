@@ -61,21 +61,21 @@ test('profile and phone changes use authenticated contracts without leaking form
     const verified = await confirmPhoneChangeVerification(sent.verificationId, '012345', session);
     const input = { ...profile, verificationProof: verified.verificationProof, verificationCode: '012345' };
     await changePhone(input, session);
-    assert.deepEqual(await requestMyPasswordResetEmail(input, session), { email: profile.email });
+    assert.deepEqual(await requestMyPasswordResetEmail(session), { email: profile.email });
     assert.deepEqual(requests, [
       { path: '/api/v1/users/me', method: 'GET', body: undefined },
       { path: '/api/v1/users/me', method: 'PATCH', body: { name: '기사', marketingConsent: false } },
       { path: '/api/v1/auth/phone-change/verifications', method: 'POST', body: { phone: profile.phone } },
       { path: '/api/v1/auth/phone-change/verifications/id%2Fwith%20space/confirm', method: 'POST', body: { code: '012345' } },
       { path: '/api/v1/auth/change-phone', method: 'POST', body: { phone: profile.phone, verificationProof: 'proof' } },
-      { path: '/api/v1/auth/me/password-reset-emails', method: 'POST', body: { phone: profile.phone, verificationProof: 'proof' } },
+      { path: '/api/v1/auth/me/password-reset-emails', method: 'POST', body: undefined },
     ]);
   }
   globalThis.fetch = async () => Response.json({ ...profile, marketingConsent: 'false' });
   await assert.rejects(getProfile({ token: 'token' }), { code: 'INVALID_RESPONSE' });
   globalThis.fetch = async () => Response.json({ success: true });
   await assert.rejects(changePhone({ phone: profile.phone, verificationProof: 'proof' }, {}), { code: 'INVALID_RESPONSE' });
-  await assert.rejects(requestMyPasswordResetEmail({ phone: profile.phone, verificationProof: 'proof' }, {}), { code: 'INVALID_RESPONSE' });
+  await assert.rejects(requestMyPasswordResetEmail({}), { code: 'INVALID_RESPONSE' });
 });
 
 test('web can use a same-site API origin without changing the native server', () => {

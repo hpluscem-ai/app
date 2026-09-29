@@ -201,7 +201,7 @@ test('old reset-mail completion preserves the new focus proof and busy state', a
   const page = await mount(), old = deferred(), current = deferred();
   let mails = 0;
   page.api.requestMyPasswordResetEmail = () => ++mails === 1 ? old.promise : current.promise;
-  page.form.values.verificationProof = 'proof'; page.resetLink();
+  page.resetLink();
   page.blur(); await page.focus();
   page.form.values.verificationProof = 'proof'; page.resetLink();
   old.reject(new Error('old mail failure')); await tick();
@@ -211,7 +211,22 @@ test('old reset-mail completion preserves the new focus proof and busy state', a
   page.resetLink(); assert.equal(mails, 2);
   current.resolve({ email: profile.email }); await tick();
   assert.deepEqual(page.notice(), { email: profile.email, type: 'password-reset-sent' });
-  assert.equal(page.form.values.verificationProof, '');
+  assert.equal(page.form.values.verificationProof, 'proof');
+});
+
+test('reset button sends without SMS proof even when the phone field is edited', async () => {
+  const page = await mount();
+  let mails = 0;
+  page.form.values.phone = '010-9999-5678';
+  page.api.requestMyPasswordResetEmail = async (session) => {
+    assert.deepEqual(session, { token: 'test-session' });
+    mails++;
+    return { email: profile.email };
+  };
+  page.resetLink(); await tick();
+  assert.equal(mails, 1);
+  assert.deepEqual(page.state.errors, []);
+  assert.deepEqual(page.notice(), { email: profile.email, type: 'password-reset-sent' });
 });
 
 test('late account failures do not open errors outside the originating focus', async () => {
