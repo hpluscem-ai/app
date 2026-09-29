@@ -353,11 +353,41 @@ function mountSheet(props) {
   return {
     animations,
     expanded: () => render().props.accessibilityViewIsModal,
+    handle() {
+      const button = nodes(render()).find((node) => node.type === 'Pressable');
+      return { button: button.props, bar: nodes(button).find((node) => node.type === 'View').props };
+    },
     toggle() { nodes(render()).find((node) => node.type === 'Pressable').props.onPress(); render(); },
     update(next) { props = next; render(); },
     unmount: hooks.unmount,
   };
 }
+
+test('single and cluster selection keep a short visible handle with a wide press target', async () => {
+  for (const [stations, expanded] of [
+    [[displayed('a')], false],
+    [[displayed('a'), displayed('b')], true],
+  ]) {
+    const page = mountMap();
+    page.requests.at(-1).resolve(stations);
+    await page.flush();
+    page.map().onMarkerPress(page.map().markers[0].id);
+    const sheet = mountSheet(page.sheet());
+    const { button, bar } = sheet.handle();
+    assert.equal(button.style.width, '100%');
+    assert.equal(button.style.height, 4);
+    assert.equal(button.hitSlop, 12);
+    assert.equal(bar.style.width, 64);
+    assert.equal(bar.style.height, 4);
+    assert.equal(bar.style.alignSelf, 'center');
+    assert.equal(sheet.expanded(), expanded);
+    sheet.toggle();
+    assert.equal(sheet.expanded(), !expanded);
+    sheet.toggle();
+    assert.equal(sheet.expanded(), expanded);
+    sheet.unmount(); page.unmount();
+  }
+});
 
 test('actual StationSheet preserves expansion on surrounding/data refresh and resets on deliberate reselection', async () => {
   const page = mountMap();

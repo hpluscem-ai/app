@@ -395,12 +395,13 @@ const styles = StyleSheet.create({
   },
   handleButton: {
     width: '100%',
-    height: 6,
+    height: 4,
     alignSelf: 'center',
   },
   handle: {
-    width: '100%',
-    height: '100%',
+    width: 64,
+    height: 4,
+    alignSelf: 'center',
     borderRadius: 4,
     backgroundColor: colors.gray400,
   },
