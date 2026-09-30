@@ -651,7 +651,7 @@ function MileageHistoryRow({
       : null;
   const amountPrefix =
     item.status === 'credited' ? '+' : item.status === 'settled' ? '-' : '';
-  const amountLabel = item.mileage === null ? '-' : `${amountPrefix}${item.mileage.toLocaleString('ko-KR')}마일`;
+  const amountLabel = actionableStatus ? '0마일' : item.mileage === null ? '-' : `${amountPrefix}${item.mileage.toLocaleString('ko-KR')}마일`;
   const badge = (
     <View
       style={[
