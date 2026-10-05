@@ -94,10 +94,11 @@ export default function MileageRoute() {
   const { state, request } = useAuth();
   const userId = state.user?.id;
   const [filter, setFilter] = useState<MileageFilter>(() => ({ period: 'threeMonths', sort: 'latest', ...getInitialCustomRange() }));
+  const { createdFrom, createdBefore, order } = mileageQuery(filter);
   const [items, setItems] = useState<MileageHistoryItem[] | undefined>();
   type Notice = { message: string; retry?: () => void };
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [summary, setSummary] = useState<{ userId: string; balance?: number; notice?: Notice } | null>(null);
+  const [summary, setSummary] = useState<{ userId: string; createdFrom?: string; createdBefore?: string; balance?: number; notice?: Notice } | null>(null);
   type Listing = { controller: AbortController; query: MileageQuery; cursor: string | null; busy: boolean; failed: boolean };
   const listing = useRef<Listing | null>(null);
 
@@ -110,17 +111,17 @@ export default function MileageRoute() {
       busy = true;
       setSummary(null);
       try {
-        const data = await request(session => getMileageSummary(session));
-        if (active) setSummary({ userId, balance: data.accumulatedMileage });
+        const data = await request(session => getMileageSummary({ createdFrom, createdBefore }, session));
+        if (active) setSummary({ userId, createdFrom, createdBefore, balance: data.accumulatedMileage });
       } catch (error) {
-        if (active) setSummary({ userId, notice: { message: getAuthErrorMessage(error), retry: () => { void load(); } } });
+        if (active) setSummary({ userId, createdFrom, createdBefore, notice: { message: getAuthErrorMessage(error), retry: () => { void load(); } } });
       } finally {
         busy = false;
       }
     };
     void load();
     return () => { active = false; setSummary(null); };
-  }, [request, userId]));
+  }, [request, userId, createdFrom, createdBefore]));
 
   const loadPage = useCallback(async (scope: Listing, append: boolean) => {
     if (listing.current !== scope || scope.controller.signal.aborted || scope.busy || (append && !scope.cursor)) return;
@@ -147,15 +148,15 @@ export default function MileageRoute() {
   }, [request]);
 
   useFocusEffect(useCallback(() => {
-    const scope: Listing = { controller: new AbortController(), query: mileageQuery(filter), cursor: null, busy: false, failed: false };
+    const scope: Listing = { controller: new AbortController(), query: { createdFrom, createdBefore, order }, cursor: null, busy: false, failed: false };
     listing.current = scope;
     setItems(undefined);
     setNotice(null);
     void loadPage(scope, false);
     return () => { scope.controller.abort(); listing.current = null; setNotice(null); setItems(undefined); };
-  }, [filter, state.user?.id, loadPage]));
+  }, [createdFrom, createdBefore, order, state.user?.id, loadPage]));
 
-  const currentSummary = summary?.userId === userId ? summary : null;
+  const currentSummary = summary && summary.userId === userId && summary.createdFrom === createdFrom && summary.createdBefore === createdBefore ? summary : null;
   // Keep both retries when history and summary fail at the same time.
   const visibleNotice = notice ?? currentSummary?.notice;
   const closeNotice = () => {

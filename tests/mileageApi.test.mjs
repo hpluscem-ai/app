@@ -27,8 +27,23 @@ test('summary uses the existing JSON contract and cookie or Bearer credentials, 
         assert.equal(options.credentials, session.credentials ?? 'omit');
         return Response.json({ accumulatedMileage });
       };
-      assert.deepEqual(await api.getMileageSummary(session), { accumulatedMileage });
+      assert.deepEqual(await api.getMileageSummary({}, session), { accumulatedMileage });
     }
+  }
+});
+
+test('summary sends the same application-date bounds as the list without its order or cursor', async () => {
+  process.env.EXPO_PUBLIC_API_URL = 'http://localhost:8080';
+  for (const period of ['oneMonth', 'threeMonths', 'custom']) {
+    const query = api.mileageQuery({ period, sort: 'oldest', startDate: '2026. 08. 01', endDate: '2026. 08. 31' }, new Date(2026, 9, 5));
+    globalThis.fetch = async (url, options) => {
+      const parsed = new URL(url);
+      assert.equal(parsed.pathname, '/api/v1/mileage/summary');
+      assert.deepEqual(Object.fromEntries(parsed.searchParams), { createdFrom: query.createdFrom, createdBefore: query.createdBefore });
+      assert.equal(options.credentials, 'include');
+      return Response.json({ accumulatedMileage: 1000 });
+    };
+    assert.deepEqual(await api.getMileageSummary({ ...query, cursor: 'next' }, { credentials: 'include' }), { accumulatedMileage: 1000 });
   }
 });
 
@@ -38,16 +53,16 @@ test('summary rejects invalid amounts and preserves API or network errors', asyn
   for (const invalid of [null, [], {}, { accumulatedMileage: null }, { accumulatedMileage: '0' },
     { accumulatedMileage: -1 }, { accumulatedMileage: 0.5 }, { accumulatedMileage: Number.MAX_SAFE_INTEGER + 1 }]) {
     globalThis.fetch = async () => Response.json(invalid);
-    await assert.rejects(api.getMileageSummary({}), { code: 'INVALID_RESPONSE' });
+    await assert.rejects(api.getMileageSummary({}, {}), { code: 'INVALID_RESPONSE' });
   }
   globalThis.fetch = async () => Response.json({ accumulatedMileage: 1 }, { status: 201 });
-  await assert.rejects(api.getMileageSummary({}), { code: 'INVALID_RESPONSE' });
+  await assert.rejects(api.getMileageSummary({}, {}), { code: 'INVALID_RESPONSE' });
   for (const [status, code] of [[401, 'INVALID_SESSION'], [500, 'INTERNAL_SERVER_ERROR']]) {
     globalThis.fetch = async () => Response.json({ code, message: '조회 실패' }, { status });
-    await assert.rejects(api.getMileageSummary({}), { status, code });
+    await assert.rejects(api.getMileageSummary({}, {}), { status, code });
   }
   globalThis.fetch = async () => { throw new Error('offline'); };
-  await assert.rejects(api.getMileageSummary({}), { code: 'NETWORK_ERROR' });
+  await assert.rejects(api.getMileageSummary({}, {}), { code: 'NETWORK_ERROR' });
 });
 
 test('calendar ranges include the selected last local day, clamp month ends and reject invalid dates', () => {
