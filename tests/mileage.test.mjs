@@ -46,7 +46,7 @@ function mount(path, extras = {}, params = {}, renderHistory = false) {
     '../../components/mileage/UploadCard': { UploadCard: 'UploadCard' },
     '../../components/icons/MileageWaterJugIcon': { MileageWaterJugIcon: 'WaterJug' },
     '../../utils/authApi': authApi,
-    '../../utils/mileageApi': { ...api, resubmitMileageApplication: (id, input, session, signal) => pending(calls, { id, input, session, signal }), getMileageSummary: (query, session) => pending(summaries, { query, session }), createMileageApplication: (input, session, signal) => pending(calls, { input, session, signal }), getMileageApplications: (query, session, signal) => pending(calls, { query, session, signal }), getMileageApplication: (id, session, signal) => pending(details, { id, session, signal }), getMileagePhoto: (id, kind, session, signal) => pending(photos, { id, kind, signal }) },
+    '../../utils/mileageApi': { ...api, resubmitMileageApplication: (id, input, session, signal) => pending(calls, { id, input, session, signal }), getMileageSummary: session => pending(summaries, { session }), createMileageApplication: (input, session, signal) => pending(calls, { input, session, signal }), getMileageApplications: (query, session, signal) => pending(calls, { query, session, signal }), getMileageApplication: (id, session, signal) => pending(details, { id, session, signal }), getMileagePhoto: (id, kind, session, signal) => pending(photos, { id, kind, signal }) },
     '../../utils/mileagePhotos': { prepareMileageResubmission: (selection, submissionVersion) => pending(preparations, { selection, submissionVersion }), prepareMileageSubmission: selection => pending(preparations, { selection }), mileagePhotoPreview: async blob => blob },
     ...extras,
   };
@@ -71,11 +71,10 @@ function mount(path, extras = {}, params = {}, renderHistory = false) {
 const id = '11111111-1111-4111-8111-111111111111';
 const item = (id, status = 'pending') => ({ id, status, submittedAt: '2026-09-22T03:00:00Z', mileageAmount: null });
 
-test('balance follows the selected period, refreshes on focus and stays independent of sort and pages', async () => {
+test('balance shows real zero, refreshes on focus and stays independent of history filters and pages', async () => {
   const page = mount('../app/mileage/index.tsx');
   assert.equal(page.summaries.length, 1);
   assert.deepEqual(page.summaries[0].session, { token: 'session' });
-  assert.deepEqual(page.summaries[0].query, { createdFrom: page.calls[0].query.createdFrom, createdBefore: page.calls[0].query.createdBefore });
   assert.equal(page.get('MileageBalanceCard').balance, undefined);
   const card = () => {
     const node = nodes(page.render()).find(n => n.type?.name === 'MileageBalanceCard');
@@ -90,41 +89,15 @@ test('balance follows the selected period, refreshes on focus and stays independ
   page.calls[0].resolve({ items: [{ ...item(id, 'approved'), mileageAmount: 300 }], nextCursor: 'next' }); await page.flush();
   page.get('AppScreen').onEndReached();
   page.calls[1].resolve({ items: [{ ...item('second', 'approved'), mileageAmount: 400 }], nextCursor: null }); await page.flush();
-  page.get('MileageHistory').onQueryChange({ ...page.get('MileageHistory').appliedFilter, sort: 'oldest' }); await page.flush();
+  page.get('MileageHistory').onQueryChange({ period: 'oneMonth', sort: 'oldest', startDate: '', endDate: '' }); await page.flush();
   assert.equal(page.summaries.length, 1);
   assert.equal(page.get('MileageBalanceCard').balance, 0);
-  page.get('MileageHistory').onQueryChange({ period: 'oneMonth', sort: 'oldest', startDate: '', endDate: '' }); await page.flush();
-  assert.equal(page.summaries.length, 2);
-  assert.deepEqual(page.summaries[1].query, { createdFrom: page.calls.at(-1).query.createdFrom, createdBefore: page.calls.at(-1).query.createdBefore });
-  assert.equal(page.get('MileageBalanceCard').balance, undefined);
-  page.summaries[1].resolve({ accumulatedMileage: 1500 }); await page.flush();
-  assert.equal(page.get('MileageBalanceCard').balance, 1500);
   page.blur(); assert.equal(page.get('MileageBalanceCard').balance, undefined);
-  page.focus(); assert.equal(page.summaries.length, 3);
-  page.summaries[2].resolve({ accumulatedMileage: 74910 }); await page.flush();
+  page.focus(); assert.equal(page.summaries.length, 2);
+  page.summaries[1].resolve({ accumulatedMileage: 74910 }); await page.flush();
   assert.equal(page.get('MileageBalanceCard').balance, 74910);
   assert.equal(card().props.accessibilityLabel, '누적 마일리지 74,910마일');
   page.unmount();
-});
-
-test('period changes hide the previous total immediately and discard late period responses', async () => {
-  for (const result of ['success', 'error']) {
-    const page = mount('../app/mileage/index.tsx');
-    page.summaries[0].resolve({ accumulatedMileage: 5000 }); await page.flush();
-    page.get('MileageHistory').onQueryChange({ period: 'custom', sort: 'latest', startDate: '2026. 08. 01', endDate: '2026. 08. 31' });
-    const firstFrame = page.render(false);
-    assert.equal(nodes(firstFrame).find(n => n.type?.name === 'MileageBalanceCard').props.balance, undefined);
-    page.render();
-    const previous = page.summaries[1];
-    page.get('MileageHistory').onQueryChange({ period: 'custom', sort: 'latest', startDate: '2026. 09. 01', endDate: '2026. 09. 30' }); await page.flush();
-    page.summaries[2].resolve({ accumulatedMileage: 1000 }); await page.flush();
-    if (result === 'success') previous.resolve({ accumulatedMileage: 9999 });
-    else previous.reject(new authApi.AuthApiError('이전 기간 오류'));
-    await page.flush();
-    assert.equal(page.get('MileageBalanceCard').balance, 1000);
-    assert.equal(page.get('NoticeModal').visible, false);
-    page.unmount();
-  }
 });
 
 test('balance discards late successes and failures after blur, account changes and unmount', async () => {
@@ -187,26 +160,20 @@ test('simultaneous history and summary failures keep both retries and suppress d
   }
 });
 
-test('summary failures and retry callbacks belong to their selected period and account', async () => {
+test('summary failure survives history filter changes and stale retry callbacks cannot affect a new account', async () => {
   const page = mount('../app/mileage/index.tsx');
   assert.equal(page.summaries.length, 1);
   page.summaries[0].reject(new authApi.AuthApiError('잔액 오류')); await page.flush();
   const oldRetry = page.get('NoticeModal').onConfirm;
   page.get('MileageHistory').onQueryChange({ period: 'oneMonth', sort: 'latest', startDate: '', endDate: '' }); await page.flush();
-  assert.equal(page.get('NoticeModal').visible, false);
+  assert.equal(page.get('NoticeModal').message, '잔액 오류');
   page.calls.at(-1).resolve({ items: [], nextCursor: null }); await page.flush();
+  assert.equal(page.get('NoticeModal').message, '잔액 오류');
+  page.auth.state = { status: 'signedIn', user: { id: 'user-2' } }; page.render();
   page.summaries[1].resolve({ accumulatedMileage: 40 }); await page.flush();
   oldRetry(); await page.flush();
   assert.equal(page.summaries.length, 2);
   assert.equal(page.get('MileageBalanceCard').balance, 40);
-  page.blur(); page.focus();
-  page.summaries[2].reject(new authApi.AuthApiError('이전 계정 오류')); await page.flush();
-  const oldAccountRetry = page.get('NoticeModal').onConfirm;
-  page.auth.state = { status: 'signedIn', user: { id: 'user-2' } }; page.render();
-  page.summaries[3].resolve({ accumulatedMileage: 50 }); await page.flush();
-  oldAccountRetry(); await page.flush();
-  assert.equal(page.summaries.length, 4);
-  assert.equal(page.get('MileageBalanceCard').balance, 50);
   page.unmount();
 });
 

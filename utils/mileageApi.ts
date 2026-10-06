@@ -134,12 +134,8 @@ async function mileageRequest(path: string, session: SessionOptions, options: {
   }
 }
 
-export async function getMileageSummary(query: Pick<MileageQuery, 'createdFrom' | 'createdBefore'>, session: SessionOptions): Promise<{ accumulatedMileage: number }> {
-  const params = new URLSearchParams();
-  if (query.createdFrom) params.set('createdFrom', query.createdFrom);
-  if (query.createdBefore) params.set('createdBefore', query.createdBefore);
-  const search = params.toString();
-  const data = record(await requestJson(`/mileage/summary${search ? `?${search}` : ''}`, { ...session, expectedStatus: 200 }));
+export async function getMileageSummary(session: SessionOptions): Promise<{ accumulatedMileage: number }> {
+  const data = record(await requestJson('/mileage/summary', { ...session, expectedStatus: 200 }));
   const value = data.accumulatedMileage;
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0) return invalidResponse();
   return { accumulatedMileage: value };
