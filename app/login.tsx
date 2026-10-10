@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Controller, useForm } from 'react-hook-form';
 
 import { AppScreen } from '../components/AppScreen';
@@ -87,7 +87,7 @@ export default function LoginRoute() {
             render={({ field: { onBlur, onChange, ref, value } }) => (
               <FormTextField
                 accessibilityLabel="이메일"
-                autoComplete="email"
+                autoComplete={Platform.OS === 'ios' ? 'off' : 'email'}
                 editable={!isSubmitting}
                 error={errors.email?.message}
                 inputRef={ref}
@@ -98,7 +98,7 @@ export default function LoginRoute() {
                 onSubmitEditing={() => setFocus('password')}
                 placeholder="이메일을 입력해주세요."
                 returnKeyType="next"
-                textContentType="username"
+                textContentType={Platform.OS === 'ios' ? 'none' : 'username'}
                 value={value}
               />
             )}
@@ -110,7 +110,7 @@ export default function LoginRoute() {
             render={({ field: { onBlur, onChange, ref, value } }) => (
               <FormTextField
                 accessibilityLabel="비밀번호"
-                autoComplete="current-password"
+                autoComplete={Platform.OS === 'ios' ? 'off' : 'current-password'}
                 editable={!isSubmitting}
                 error={errors.password?.message}
                 inputRef={ref}
@@ -121,7 +121,7 @@ export default function LoginRoute() {
                 placeholder="비밀번호를 입력해주세요."
                 returnKeyType="done"
                 secureTextEntry
-                textContentType="password"
+                textContentType={Platform.OS === 'ios' ? 'none' : 'password'}
                 value={value}
               />
             )}

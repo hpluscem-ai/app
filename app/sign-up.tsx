@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Controller, FormProvider, useForm } from 'react-hook-form';
 
 import { AppScreen } from '../components/AppScreen';
@@ -261,7 +261,7 @@ export default function SignUpRoute() {
                 render={({ field: { onBlur, onChange, ref, value } }) => (
                   <FormTextField
                     accessibilityLabel="이메일"
-                    autoComplete="email"
+                    autoComplete={Platform.OS === 'ios' ? 'off' : 'email'}
                     editable={!isSubmitting}
                     error={errors.email?.message}
                     inputRef={ref}
@@ -271,7 +271,7 @@ export default function SignUpRoute() {
                     onChangeText={(nextValue) => onChange(nextValue.replace(/\s/g, ''))}
                     onSubmitEditing={() => setFocus('password')}
                     placeholder="이메일을 입력해주세요."
-                    textContentType="emailAddress"
+                    textContentType={Platform.OS === 'ios' ? 'none' : 'emailAddress'}
                     value={value}
                   />
                 )}
@@ -284,7 +284,7 @@ export default function SignUpRoute() {
                 render={({ field: { onBlur, onChange, ref, value } }) => (
                   <FormTextField
                     accessibilityLabel="비밀번호"
-                    autoComplete="new-password"
+                    autoComplete={Platform.OS === 'ios' ? 'off' : 'new-password'}
                     editable={!isSubmitting}
                     error={errors.password?.message}
                     inputRef={ref}
@@ -294,7 +294,7 @@ export default function SignUpRoute() {
                     onSubmitEditing={() => setFocus('passwordConfirmation')}
                     placeholder="영문, 특수문자, 숫자를 포함한 비밀번호 8자리 이상"
                     secureTextEntry
-                    textContentType="newPassword"
+                    textContentType={Platform.OS === 'ios' ? 'none' : 'newPassword'}
                     value={value}
                   />
                 )}
@@ -310,7 +310,7 @@ export default function SignUpRoute() {
                 render={({ field: { onBlur, onChange, ref, value } }) => (
                   <FormTextField
                     accessibilityLabel="비밀번호 확인"
-                    autoComplete="new-password"
+                    autoComplete={Platform.OS === 'ios' ? 'off' : 'new-password'}
                     editable={!isSubmitting}
                     error={errors.passwordConfirmation?.message}
                     inputRef={ref}
@@ -320,7 +320,7 @@ export default function SignUpRoute() {
                     onSubmitEditing={() => setFocus('name')}
                     placeholder="비밀번호를 다시 한 번 입력해주세요."
                     secureTextEntry
-                    textContentType="newPassword"
+                    textContentType={Platform.OS === 'ios' ? 'none' : 'newPassword'}
                     value={value}
                   />
                 )}
