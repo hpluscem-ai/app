@@ -29,7 +29,7 @@ export default function NotFoundScreen() {
               </View>
               <Text style={styles.description}>
                 {
-                  '존재하지 않는 주소를 입력하셨거나,\n요청하신 페이지의 주소가 변경, 삭제되어 찾을 수 없습니다.\n궁금하신 점이 있으시면 언제든 sales@nocoders.kr로 문의해 주시기 바랍니다.\n\n감사합니다.'
+                  '존재하지 않는 주소를 입력하셨거나,\n요청하신 페이지의 주소가 변경, 삭제되어 찾을 수 없습니다.\n궁금하신 점이 있으시면 언제든 kmpark@hpluseco.co.kr로 문의해 주시기 바랍니다.\n\n감사합니다.'
                 }
               </Text>
             </View>
