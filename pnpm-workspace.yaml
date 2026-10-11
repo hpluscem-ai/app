@@ -1,2 +1,4 @@
 allowBuilds:
   '@sentry/cli': true
+patchedDependencies:
+  '@mj-studio/react-native-naver-map@2.9.0': patches/@mj-studio__react-native-naver-map@2.9.0.patch

@@ -10,10 +10,11 @@ export function LegalDocumentPage({ document }: { document: LegalDocument }) {
 
   return (
     <AppScreen variant="plain">
-      <Head>
-        {Platform.OS !== 'web' && <title>{title}</title>}
-        <meta name="robots" content="noindex, nofollow" />
-      </Head>
+      {Platform.OS === 'web' && (
+        <Head>
+          <meta name="robots" content="noindex, nofollow" />
+        </Head>
+      )}
       <View style={styles.content}>
         <Text accessibilityRole="header" style={styles.title}>
           {title}

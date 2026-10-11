@@ -497,24 +497,162 @@ test('a protected error notice retries the latest bounds after the failed reques
   page.unmount();
 });
 
-test('native marker snapshots remount for label/count updates and receive coordinate changes', () => {
+test('native map preserves center regions while adapting them to Naver bounds', () => {
+  process.env.EXPO_PUBLIC_NAVER_MAP_CLIENT_ID = 'test-client-id';
   const source = ts.transpileModule(readFileSync(new URL('../components/map/MapCanvas.tsx', import.meta.url), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const jsx = (type, props, key) => ({ type, props, key });
+  const refs = [];
+  const mapHandle = { current: null };
   const imports = {
-    react: { useRef: (current) => ({ current }), useImperativeHandle() {} },
+    react: {
+      useEffect() {},
+      useImperativeHandle(ref, create) { ref.current = create(); },
+      useRef(current) { const ref = { current }; refs.push(ref); return ref; },
+    },
     'react/jsx-runtime': { jsx, jsxs: jsx },
     'react-native': { StyleSheet: { absoluteFill: {} } },
-    'react-native-maps': 'MapView',
+    '@mj-studio/react-native-naver-map': { NaverMapView: 'NaverMapView' },
     './StationMarker': { StationMarker: 'StationMarker' },
   };
   const component = {};
   new Function('require', 'exports', source)((name) => imports[name], component);
   const marker = { id: 'a', selected: false, label: 'old', coordinate: { latitude: 0, longitude: 0 } };
-  const render = (overrides) => nodes(component.MapCanvas({ markers: [{ ...marker, ...overrides }] }))
-    .find((node) => node.type === 'StationMarker');
-  assert.notEqual(render().key, render({ label: 'new' }).key);
-  assert.notEqual(render({ count: 2 }).key, render({ count: 3 }).key);
-  assert.deepEqual(render({ coordinate: { latitude: 1, longitude: 2 } }).props.coordinate, { latitude: 1, longitude: 2 });
+  const callbacks = { regions: [], pressed: 0, ready: 0 };
+  const tree = component.MapCanvas({
+    ref: mapHandle,
+    initialRegion: { latitude: 37.5, longitude: 127, latitudeDelta: 1, longitudeDelta: 2 },
+    bottomPadding: 136,
+    locationEnabled: true,
+    markers: [marker],
+    onError() {},
+    onMarkerPress() {},
+    onPress() { callbacks.pressed += 1; },
+    onReady() { callbacks.ready += 1; },
+    onRegionChangeComplete(region) { callbacks.regions.push(region); },
+  });
+  const map = nodes(tree).find((node) => node.type === 'NaverMapView');
+  assert.deepEqual(map.props.initialRegion, {
+    latitude: 37,
+    longitude: 126,
+    latitudeDelta: 1,
+    longitudeDelta: 2,
+  });
+  assert.deepEqual(map.props.mapPadding, { bottom: 136, left: 0, right: 0, top: 0 });
+  assert.equal(map.props.logoAlign, 'TopLeft');
+  assert.equal(map.props.isShowZoomControls, false);
+  assert.equal(map.props.isShowLocationButton, false);
+  mapHandle.current.animateToRegion(
+    { latitude: 36, longitude: 128, latitudeDelta: 0.4, longitudeDelta: 0.6 },
+    240,
+  );
+  const calls = [];
+  refs[0].current = {
+    animateRegionTo: (params) => calls.push(['region', params]),
+    setLocationTrackingMode: (mode) => calls.push(['location', mode]),
+  };
+  map.props.onInitialized();
+  assert.deepEqual(calls, [
+    ['location', 'NoFollow'],
+    ['region', { latitude: 35.8, longitude: 127.7, latitudeDelta: 0.4, longitudeDelta: 0.6, duration: 240 }],
+  ]);
+  map.props.onCameraIdle({ region: { latitude: 35.8, longitude: 127.7, latitudeDelta: 0.4, longitudeDelta: 0.6 } });
+  assert.deepEqual(callbacks.regions, [{ latitude: 36, longitude: 128, latitudeDelta: 0.4, longitudeDelta: 0.6 }]);
+  map.props.onTapMap();
+  assert.equal(callbacks.pressed, 1);
+  assert.equal(callbacks.ready, 1);
+});
+
+test('native map reports an absent Naver client ID without creating a map', () => {
+  delete process.env.EXPO_PUBLIC_NAVER_MAP_CLIENT_ID;
+  const source = ts.transpileModule(readFileSync(new URL('../components/map/MapCanvas.tsx', import.meta.url), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const errors = [];
+  const imports = {
+    react: {
+      useEffect: (effect) => effect(),
+      useImperativeHandle() {},
+      useRef: (current) => ({ current }),
+    },
+    'react/jsx-runtime': { jsx: (type, props, key) => ({ type, props, key }), jsxs: (type, props, key) => ({ type, props, key }) },
+    'react-native': { StyleSheet: { absoluteFill: {} } },
+    '@mj-studio/react-native-naver-map': { NaverMapView: 'NaverMapView' },
+    './StationMarker': { StationMarker: 'StationMarker' },
+  };
+  const component = {};
+  new Function('require', 'exports', source)((name) => imports[name], component);
+  assert.equal(component.MapCanvas({
+    initialRegion: { latitude: 37.5, longitude: 127, latitudeDelta: 1, longitudeDelta: 2 },
+    bottomPadding: 0,
+    locationEnabled: false,
+    markers: [],
+    onError: (error) => errors.push(error),
+    onMarkerPress() {},
+    onPress() {},
+    onReady() {},
+    onRegionChangeComplete() {},
+  }), null);
+  assert.equal(errors[0]?.message, 'NAVER_MAP_NOT_CONFIGURED');
+});
+
+test('native markers use a centered custom Naver overlay and refresh their content', () => {
+  const source = ts.transpileModule(readFileSync(new URL('../components/map/StationMarker.tsx', import.meta.url), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 },
+  }).outputText;
+  const jsx = (type, props, key) => ({ type, props, key });
+  const updates = [];
+  const imports = {
+    react: { useState: (initial) => [initial, (value) => updates.push(value)] },
+    'react/jsx-runtime': { jsx, jsxs: jsx },
+    'react-native': { StyleSheet: { create: (value) => value }, View: 'View' },
+    '@mj-studio/react-native-naver-map': { NaverMapMarkerOverlay: 'NaverMapMarkerOverlay' },
+    './StationMarkerContent': { StationMarkerContent: 'StationMarkerContent' },
+  };
+  const component = {};
+  new Function('require', 'exports', source)((name) => imports[name], component);
+  const onPress = () => {};
+  const marker = component.StationMarker({
+    coordinate: { latitude: 37.5665, longitude: 126.978 },
+    count: 2,
+    label: 'ignored for cluster',
+    onPress,
+    selected: true,
+  });
+  assert.equal(marker.type, 'NaverMapMarkerOverlay');
+  assert.deepEqual(marker.props.anchor, { x: 0.5, y: 0.5 });
+  assert.equal(marker.props.latitude, 37.5665);
+  assert.equal(marker.props.longitude, 126.978);
+  assert.equal(marker.props.onTap, onPress);
+  assert.equal(marker.props.height, 28);
+  assert.equal(marker.props.width, 28);
+  assert.equal(marker.props.zIndex, 1);
+  const content = marker.props.children;
+  assert.equal(content.type, 'View');
+  assert.equal(content.props.collapsable, false);
+  content.props.onLayout({ nativeEvent: { layout: { height: 28, width: 120 } } });
+  assert.deepEqual(updates[0]({ height: 28, width: 28 }), { height: 28, width: 120 });
+  assert.deepEqual(content.props.children.props, {
+    count: 2,
+    label: 'ignored for cluster',
+    selected: true,
+  });
+  const changed = component.StationMarker({
+    coordinate: { latitude: 37.5665, longitude: 126.978 },
+    count: 3,
+    label: 'ignored for cluster',
+    onPress,
+    selected: true,
+  });
+  assert.notEqual(content.key, changed.props.children.key);
+  const labelMarker = component.StationMarker({
+    coordinate: { latitude: 37.5665, longitude: 126.978 },
+    label: 'HEUD-SELF-05 / 2,500L',
+    onPress,
+  });
+  assert.equal(labelMarker.props.width, 220);
+  assert.deepEqual(labelMarker.props.children.props.style, { alignSelf: 'flex-start' });
+  labelMarker.props.children.props.onLayout({ nativeEvent: { layout: { height: 27.1, width: 165.01 } } });
+  assert.deepEqual(updates.at(-1)({ height: 28, width: 220 }), { height: 28, width: 166 });
 });

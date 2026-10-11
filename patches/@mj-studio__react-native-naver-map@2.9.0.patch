@@ -1,0 +1,14 @@
+diff --git a/android/src/main/java/com/mjstudio/reactnativenavermap/overlay/marker/RNCNaverMapMarker.kt b/android/src/main/java/com/mjstudio/reactnativenavermap/overlay/marker/RNCNaverMapMarker.kt
+index 509e1ec715d475671f26797a70fc2872cd6fde9c..24c4f36c69d51452da4d15c1bcce8a1a6450c813 100644
+--- a/android/src/main/java/com/mjstudio/reactnativenavermap/overlay/marker/RNCNaverMapMarker.kt
++++ b/android/src/main/java/com/mjstudio/reactnativenavermap/overlay/marker/RNCNaverMapMarker.kt
+@@ -88,7 +88,8 @@ class RNCNaverMapMarker(
+   fun removeCustomView(index: Int) {
+     customView = null
+     ViewChangesTracker.getInstance().removeMarker(this)
+-    if (customViewBitmap != null && !customViewBitmap!!.isRecycled) customViewBitmap!!.recycle()
++    // The map renderer may still hold this bitmap; let GC release it after rendering.
++    customViewBitmap = null
+     isImageSetFromSubview = false
+     setImageWithLastImage()
+     super.removeView(children.elementAt(index))

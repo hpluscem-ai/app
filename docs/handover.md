@@ -51,7 +51,7 @@ flowchart LR
   API --> OCR[OpenAI OCR]
 ```
 
-지도 화면은 네이티브에서 `react-native-maps`, 웹에서 네이버 Maps를 사용한다. 위치·목록 데이터는 기사 인증 API로 받는다. Supabase S3 키·문자·메일·OCR 비밀키를 클라이언트에 전달하지 않는다.
+지도 화면은 iOS·Android에서 `@mj-studio/react-native-naver-map`, 웹에서 네이버 Maps JavaScript SDK를 사용한다. `EXPO_PUBLIC_NAVER_MAP_CLIENT_ID`는 Naver Cloud Maps에서 웹 URL과 iOS Bundle ID·Android package `com.hayan100.app`을 등록한 Client ID다. 위치·목록 데이터는 기사 인증 API로 받는다. 네이버 Client Secret·Supabase S3 키·문자·메일·OCR 비밀키를 클라이언트에 전달하지 않는다.
 
 ### 기술 스택
 
@@ -89,7 +89,11 @@ flowchart LR
 | 앱 | `pnpm install --frozen-lockfile` | `pnpm web` | `http://localhost:4000` |
 | 관리자 | `pnpm install --frozen-lockfile` | `pnpm dev` | `http://localhost:5173` |
 | 앱 QA 보드 | 앱 의존성 사용 | `pnpm qa` | `http://127.0.0.1:4001/qa/user`, `/qa/admin` |
-| 네이티브 앱 | 앱 의존성 사용 | `pnpm start`, 필요 시 `pnpm ios` / `pnpm android` | Metro와 연결된 시뮬레이터·기기 |
+| 네이티브 앱 | 앱 의존성 사용 | `pnpm ios` / `pnpm android`로 전용 앱 빌드·실행, 이후 `pnpm start` | Metro와 연결된 시뮬레이터·기기. 네이버 SDK는 Expo Go에서 실행 불가 |
+
+Android 커스텀 마커 제거 시 렌더러가 사용 중인 비트맵을 즉시 해제하는 문제는 `patches/@mj-studio__react-native-naver-map@2.9.0.patch`로 보완한다. `pnpm-workspace.yaml`의 패치 설정과 lockfile을 함께 유지한다. 패치 적용 후에는 Android 자동 연결 캐시가 패치된 라이브러리를 참조하는지도 확인한다.
+
+네이버 Client ID·네이티브 의존성·앱 식별자를 변경하면 네이티브 앱을 다시 빌드한다. 기존 `react-native-maps` 앱에 새 지도 JavaScript만 OTA 배포하지 않는다. 현재 `runtimeVersion`은 앱 버전 정책이므로 실제 배포 전에 기존 바이너리와 구분되는 앱 버전·런타임을 설정해야 한다.
 
 의존성 설치와 새 환경의 부팅은 이번 문서 작성 중 다시 수행하지 않았다. 위 명령은 저장소 스크립트와 기존 실행 기록 기준이다. 이미 실행 중인 개발 서버가 있으면 중복 기동하지 않는다.
 
@@ -114,7 +118,7 @@ flowchart LR
 |---|---|
 | `EXPO_PUBLIC_API_URL` | 네이티브 API 주소, 웹 기본 주소 |
 | `EXPO_PUBLIC_WEB_API_URL` | 웹 전용 API 주소 |
-| `EXPO_PUBLIC_NAVER_MAP_CLIENT_ID` | 네이버 Web Dynamic Map의 공개 Client ID(`ncpKeyId`). 정확한 접속 URL 등록 필요 |
+| `EXPO_PUBLIC_NAVER_MAP_CLIENT_ID` | 네이버 Dynamic Map의 공개 Client ID(`ncpKeyId`). 웹 접속 URL과 Android package·iOS Bundle ID 등록 필요 |
 | `EXPO_PUBLIC_TMAP_APP_KEY` | 모바일 웹 TMAP Invoke. 비어 있으면 네이버 길찾기로 연결 |
 | `EXPO_PUBLIC_SENTRY_DSN`, `EXPO_PUBLIC_SENTRY_ENVIRONMENT` | 배포 앱 오류 수집. DSN 존재 + 개발 모드 아님 조건에서 활성화 |
 | `SENTRY_ORG`, `SENTRY_PROJECT`, `SENTRY_AUTH_TOKEN` | 빌드·소스맵 업로드용. 인증 토큰은 공개 런타임 변수로 두지 않음 |

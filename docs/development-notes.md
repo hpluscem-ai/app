@@ -1208,9 +1208,123 @@
 - 원복 범위: 기사 앱의 요약 API 호출과 기간/목록 조회 흐름, 관련 테스트·QA를 변경 전으로 되돌렸다. 서버의 기사 요약 API도 본인의 전체 기간 승인·미정산 마일리지만 합산하도록 복원했다. 기존 인증·오류·정상 0 처리와 UI·문구·배치·스타일은 유지하며 정산 완료 신청은 기사 앱의 합계·목록·상세에서 제외한다.
 - 검증: 앱 마일리지/API 테스트 31개와 격리 PostgreSQL 17의 정산·대시보드 HTTP 테스트 87개로 총 118개가 통과했다. 두 저장소 TypeScript와 서버 변경 파일 ESLint·Prettier 검사도 통과했다. 기사 앱 소스·API·테스트·QA가 `5341289` 이전과 같고 어드민 대시보드 계산은 `b27bceb`과 동일함을 비교했다. 기사 앱 화면 JSX·문구·스타일도 변경 전 HEAD와 동일하다. 운영 DB·실기기·실제 브라우저·푸시·배포는 수행하지 않았다.
 
+## 2026-10-06 — 어드민 기사 누적값·문서·반려 사유 연결
+
+- 사용자 승인: 계획과 한 장의 와이어프레임을 검토한 뒤 `ㄱㄱㄱ`로 구현을 승인했다. 기사 목록의 최종 금액·적립 마일리지는 같은 기사 ID의 전체 기간 현재 승인 이력으로 합산하며 정산 완료분을 포함한다. 승인 이력이 없으면 두 값 모두 0이고 가입일 조회 조건은 합산 기간을 제한하지 않는다. 기사 앱의 미정산 잔액 기준은 변경하지 않았다.
+- 구현: 기존 기사 조회 API에 `totalAmount`·`mileage`를 추가했다. 승인 신청을 한 번 집계해 LEFT JOIN하고 합계의 정밀도를 유지한 뒤 서버와 어드민에서 0 이상 안전 정수를 검사한다. 기존 두 열에 콤마를 적용하고 조회 실패를 정상 0으로 처리하지 않는다. 영수 목록은 기존 승인여부 칸 아래 `gap: 4px`의 `사유 보기`와 공용 `NoticeDialog`를 사용해 저장된 사유를 조회한다. OCR 실패·중복 의심의 일치여부만 0으로 표시한다.
+- 문서·보류: 공통 푸터는 기존 공개 [이용약관](https://www.hayan100.kr/term)·[개인정보처리방침](https://www.hayan100.kr/privacy)을 새 탭으로 연결하고 밑줄을 제거했다. 원문은 수정하지 않았다. 관리자 로그아웃, 복수 기기 모델·용량 편집, 주유소·기기 운영 상태 변경은 보류를 유지한다. DB 열·마이그레이션·API 경로·라이브러리를 추가하지 않았다.
+- 관련 자동 검사: 변경 전 실패를 확인한 뒤 기사/영수 어드민 테스트 42개와 전용 PostgreSQL의 기사 HTTP 테스트 21개, 총 63개가 통과했다. 정산 전후 같은 15,000원/300마일, 정상 0, 동일 이름·재가입 ID 분리, 가입일과 누적 기간 분리, 안전 정수 초과 오류, 조회 실패의 기존 목록 유지, 저장된 사유 읽기·기존 반려 저장·다섯 OCR 상태를 확인했다. 어드민 `pnpm build`·`pnpm lint`, 서버 TypeScript·변경 파일 ESLint와 diff 공백 검사도 통과했다.
+- 직접 코드리뷰: 집계의 기사 ID·승인 조건·정산 독립성, 숫자 계약, 사유 조회의 요청 부재·팝업 배타성·비동기 목록 갱신을 점검했다. 늦은 재조회 성공 후 이전 사유가 남는 경우를 발견해 실패 테스트로 재현하고 목록 교체 시 사유를 닫는 한 줄을 보완했다. 재검사 42개를 통과했다. 별도 에이전트 리뷰는 수행하지 않았다.
+
+브라우저 확인은 실제 로컬 서버·관리자 쿠키·격리된 임시 DB에서 수행했다. 무거래 0/0과 정산 전후 15,000/300, 다섯 OCR 상태, 빈 사유 버튼 부재, 저장된 사유의 정확한 본문, 실제 새 반려 저장·재조회, 긴 사유의 줄바꿈을 확인했다. 기존 셀 높이 52px·버튼 간격 4px을 유지하며 콘솔 오류는 없었다. Chrome에서 로그인·기사 목록의 두 문서 클릭 후 각각 올바른 새 탭·본문과 기존 기사 이름·소속·날짜 조건 유지를 확인했다. [기사 누적 화면](/Users/sangkun/.codex/visualizations/2026/10/06/01a10ffa-0514-7e43-88f2-f493530bec4a/admin-driver-totals-qa.jpg), [반려 사유 화면](/Users/sangkun/.codex/visualizations/2026/10/06/01a10ffa-0514-7e43-88f2-f493530bec4a/admin-rejection-reason-qa.jpg)은 가상 테스트 데이터다. QA의 AC-201·DR-202·RC-301·RC-302만 이번 격리 실행 결과로 표시했다.
+
+전체 검사는 어드민 111개 중 105개, 서버 단위 179개 중 178개가 통과했다. 아래 7개는 변경 전 HEAD를 임시 폴더에 복사해 동일하게 실패함을 재현했다. 관련 없는 코드와 테스트는 수정하지 않았다.
+
+| 기존 실패 테스트 | 위치·원인 |
+|---|---|
+| `real settlement list fields, bank names and zero mileage replace samples` | `tests/logisticsCompanies.test.mjs`: 기존 정산 fixture에 현재 계약의 `registeredMileage`·`additionalUnpaidMileage`가 없어 파서가 거절한다. |
+| `deactivation explains preserved records, supports cancel, and waits for 204 with duplicate protection` | 같은 fixture 누락으로 최초 목록 조회가 실패한다. |
+| `failed deactivation keeps real rows and offers retry in the existing modal` | 같은 fixture 누락. |
+| `cancelled requests refresh without overwriting the next target and stale refreshes cannot restore inactive rows` | 같은 fixture 누락. |
+| `cancelled deactivation failure refreshes uncertain server state without showing an old error` | 같은 fixture 누락. |
+| `late deactivation responses after leaving cannot refresh or redirect; current 401 still redirects` | 같은 fixture 누락. |
+| `DatabaseService › adds nullable OCR leases without changing existing OCR records` | `src/database/database.service.spec.ts`: OCR lease 열을 지운 뒤 최신 migration journal을 지우므로 이미 존재하는 `liters` 열 추가를 재실행한다. |
+
+검사 로그: [관련 어드민 42개](/private/tmp/hpluseco-admin-connections-green.log), [전체 어드민](/private/tmp/hpluseco-admin-all-final.log), [전체 서버 단위](/private/tmp/hpluseco-server-unit.log), [어드민 HEAD 재현](/private/tmp/hpluseco-admin-baseline.log), [서버 HEAD 재현](/private/tmp/hpluseco-server-baseline.log). 서버 최종 기사 HTTP 21개·TypeScript·ESLint 명령도 종료 코드 0으로 완료했다.
+
+추가 문서 검사 `node --test tests/qa.test.mjs`는 기존 어드민 문서의 `UP-139` 중복으로 실행 준비 단계에서 실패했다. 현재 문서와 변경 전 HEAD 모두 같은 중복 ID이며 신규 AC-201·DR-202·RC-301·RC-302는 각각 한 번만 존재한다. 기존 중복의 두 번째 행만 메모리에서 제외한 렌더 검사로 현재 문서의 전체 표 형식·신규 ID가 정상임을 확인했다. 원본의 기존 ID·QA 테스트는 수정하지 않았다.
+
+기존 앱 `app.json`·`eas.json`과 서버 `.DS_Store`를 보존했다. 브랜치·커밋·푸시·배포·운영 DB·실제 송금·외부 발송은 수행하지 않았다. 배포 시 새 숫자 계약을 제공하는 서버를 먼저 반영한 뒤 어드민을 반영한다. 임시 API·Vite를 종료했고 API의 정상 종료로 자체 QA DB도 삭제했다.
+
+## 2026-10-07 — iOS 사진 등록 실패 수정
+
+- 사용자 결정: 전체 QA 후 iOS 이미지 등록 실패부터 수정하도록 요청했다. AI가 원인 조사·코드 수정·자동 검사·시뮬레이터 및 어드민 확인을 수행했다. UI·서버·환경 설정은 변경하지 않았다.
+- 원인과 수정: Expo SDK 57의 `File.copy()`는 비동기이므로 완료를 기다린 다음 복사본의 크기를 확인한다. 기존 네이티브 `{ uri, name, type }` multipart는 설치된 Expo 직렬화 코드에서 `Unsupported FormDataPart implementation`을 재현했다. 네이티브 사진 준비 결과에 실제 Expo `File`을 포함해 기존 업로드의 Blob/File 경로를 사용한다. 웹은 기존 Blob 처리를 유지하고 신규 신청·반려 재등록·JPEG 변환이 같은 준비 함수를 사용한다. [Expo 57 FileSystem 문서](https://docs.expo.dev/versions/v57.0.0/sdk/filesystem/)의 File/FormData 업로드 계약을 따랐다.
+- 자동 검증: 비동기 복사 가짜 구현으로 변경 전 `PHOTO_TOO_LARGE` 실패를 재현했다. 수정 후 마일리지·API 테스트 31개, `pnpm typecheck`, `git diff --check`가 통과했다. 복사·변환·부분 교체 사진에 File이 전달되는지 검사했고 별도 읽기 전용 코드리뷰에서 추가 문제를 발견하지 않았다.
+- 실제 확인: iPhone 16 Pro 시뮬레이터의 Expo Go에서 비개인 32×64 단색 QA PNG를 1장 등록했다. 운영 API의 접수 성공 안내, 앱의 대기 목록·저장 사진 상세, 운영 어드민의 테스트 기사 신청 1건·사진 열기를 확인했다. 신청은 대기·0마일 상태이며 승인·정산·SMS·메일 발송은 수행하지 않았다. 이 사진은 OCR 정확도 검증용 영수증이 아니다. [iOS 접수 완료](/Users/sangkun/.codex/visualizations/2026/10/06/01a1105e-e103-7010-aded-9c4acdfd5419/full-qa-2026-10-07/screenshots/ios-upload-fixed-success.png). Android·실기기·2장·반려 재등록의 수동 재검증과 배포는 이번에 수행하지 않았다.
+
+## 2026-10-07 — Android 달력 날짜 감소 수정·지도 빌드 설정 (Google 지도 설정은 2026-10-08 네이버 전환으로 대체)
+
+- 사용자 요청: QA에서 확인한 날짜 감소와 지도 인증 문제를 수정하고 검증한다. 기존 사용자 변경·iOS 사진 수정·화면 구조와 스타일은 보존했다. iOS 날짜 칸 미표시 문제는 이 Android 날짜 변환 수정의 완료 범위에 포함하지 않는다.
+- 날짜 원인·수정: Android Material 달력은 날짜를 UTC 자정으로 교환하는데, 앱이 한국 시간 자정을 전달해 10월 1일이 9월 30일 15:00 UTC로 바뀌었다. 시작일·종료일이 공유하는 `MileageDateField`에서 Android 입력과 결과만 UTC 날짜로 처리했다. iOS·웹 변환과 조회 API의 현지 날짜 경계는 유지했다.
+- 날짜 검증: 수정 전 회귀 테스트의 10월 1일 입력이 `2026-09-30T15:00:00.000Z`가 되는 실패를 확인했다. 수정 후 마일리지/API 32개와 TypeScript·diff 공백 검사를 통과했다. 3개 시간대, 월말·연말·윤일·일광절약시간 경계, 시작/종료 반복 확인·날짜 변경·취소를 자동 검사했다. 새 Android API 36.1 에뮬레이터·Expo Go 57.0.9·Asia/Seoul에서 현재 Metro 번들 다운로드 후 로그인했고, 시작일 10월 1일과 종료일 10월 7일을 각각 두 번 확인해도 유지됨을 확인했다. 10월 2일 선택 반영, 다시 3일을 선택한 뒤 취소하면 2일 유지, 조회 조건 닫기 뒤 내역 표시도 확인했다. [반복 확인 화면](/Users/sangkun/.codex/visualizations/2026/10/06/01a1105e-e103-7010-aded-9c4acdfd5419/full-qa-2026-10-07/screenshots/android-date-fixed-unchanged.png), [변경·취소 화면](/Users/sangkun/.codex/visualizations/2026/10/06/01a1105e-e103-7010-aded-9c4acdfd5419/full-qa-2026-10-07/screenshots/android-date-fixed-cancel.png).
+- 지도 설정·한계: `app.config.ts`는 기존 `app.json`을 그대로 확장하고 `GOOGLE_MAPS_ANDROID_API_KEY`가 있을 때만 설치된 `react-native-maps` 플러그인에 전달한다. `.env.example`에 키 이름과 Android 패키지·서명 SHA-1 제한 안내를 추가했다. 키가 없는 config 보존과 비밀이 아닌 임시 문자열의 AndroidManifest 주입을 `expo config`로 검증했다. 로컬 및 EAS development/preview/production에는 해당 키가 없었다. 새 Expo Go에서도 `Google Android Maps SDK: Authorization failure`를 재현했으며 실제 지도 표시는 미해결이다. Maps SDK for Android가 활성화된 키를 `com.hayan100.app`과 실제 빌드 서명 SHA-1에 제한해 설정한 뒤 전용 Android 바이너리를 다시 빌드하고 타일·주유소를 검증해야 한다. Expo Go 자체 인증 키를 앱 설정으로 교체할 수는 없다. [Expo SDK 57 지도 문서](https://docs.expo.dev/versions/v57.0.0/sdk/map-view/), [새 환경 지도 화면](/Users/sangkun/.codex/visualizations/2026/10/06/01a1105e-e103-7010-aded-9c4acdfd5419/full-qa-2026-10-07/screenshots/android-map-clean-environment.png).
+- 추가 검사·경계: 읽기 전용 날짜/설정 코드리뷰에서 추가 문제는 없었다. 필수 `expo install --check`는 기존 Expo 57 패치 버전 불일치로 실패했다(예: expo 57.0.13 → 권장 57.0.27, @expo/ui 57.0.17 → 권장 57.0.22, react-native 0.86.2 → 권장 0.86.3). 이번 수정으로 의존성이나 lockfile을 변경하지 않았다. 기존 Expo Go의 번들 갱신 문제를 피하려고 임시 에뮬레이터를 만들었으며 기존 기기 데이터는 초기화하지 않았다. 지도 전용 빌드·배포·SMS·메일 발송·신청 데이터 변경은 수행하지 않았다.
+
+## 2026-10-08 — iOS·Android 네이버 지도 전환
+
+- 사용자 결정: 한 장의 iOS·Android 와이어프레임과 iOS Bundle ID `com.hayan100.app`을 검토하고 `진행해`로 승인했다. AI가 기존 화면·주유소 API·길안내를 유지하면서 지도 어댑터·빌드 설정을 교체하고 자동 검사와 플랫폼 빌드를 수행했다. 사용자의 기존 EAS 설정·날짜 및 사진 수정·다른 문서 변경을 보존했다.
+- 구현: `react-native-maps`를 `@mj-studio/react-native-naver-map@2.9.0`으로 교체했다. 앱의 중심 좌표 기반 `MapRegion`을 네이버의 남서쪽 기준 영역과 상호 변환하고, 준비 전 카메라 이동·조회 범위·현재 위치·기존 마커 컨텐츠와 선택 동작을 연결했다. Android 커스텀 마커 비트맵에 필요한 폭·높이는 기존 자식 View를 실측해 전달한다. 별도 UI나 WebView는 추가하지 않았다.
+- 네이티브 설정: 기존 `app.json`을 확장하는 `app.config.ts`에서 같은 `EXPO_PUBLIC_NAVER_MAP_CLIENT_ID`를 Naver plugin의 `client_id`로 전달한다. `expo-build-properties`로 공식 Android Maven 저장소를 등록했다. iOS Bundle ID·Android package는 `com.hayan100.app`이며 Naver Cloud Maps의 Mobile Dynamic Map 설정에도 정확히 등록해야 한다. 실제 `.env.local`·`.env.prod`와 비밀키는 변경하지 않았다. `pnpm ios`·`pnpm android`는 전용 네이티브 앱 빌드 명령이며 Expo Go에는 이 SDK가 없다. 웹은 기존 네이버 JavaScript SDK를 유지한다.
+- 자동 검사·리뷰: 주유소/API·지도 테스트 16개, 날짜·사진 관련 마일리지/API 테스트 32개와 TypeScript·diff 공백 검사를 통과했다. 중심/남서 영역 변환, 준비 전 카메라 이동, 현재 위치 추적, 마커 컨텐츠·실측 크기, 빈 Client ID의 기존 오류 경로를 검사했다. 읽기 전용 리뷰에서 발견한 Android 마커 크기 누락과 빈 키 처리를 보완했고 재검토에서 추가 문제는 없었다. 최종 코드로 iOS·Android·웹 `expo export --platform all`을 통과했다([로그](/private/tmp/hayan-naver-export-final.log)). `expo config --type public` 및 introspect로 두 플랫폼의 앱 식별자·Naver 키 주입·Maven 설정을 확인했다. `expo install --check`는 전환 전부터 있던 Expo 57 패치 버전 차이 15개로 실패하며 전체 SDK를 임의로 올리지 않았다.
+- Android 빌드·실행: `./gradlew :app:assembleDebug -PreactNativeArchitectures=arm64-v8a`가 성공했고 생성 APK를 기존 API 36.1 에뮬레이터에 설치했다. [빌드 로그](/private/tmp/hayan-naver-android-build.log). 첫 실행의 Android System UI ANR은 데이터를 보존한 재부팅으로 해소했다. Metro의 IPv6 전용 접속은 IPv4 우선 실행으로 연결했고, 개발 번들에서는 초기 검은 화면이 남아 JavaScript·37개 에셋을 APK에 포함한 별도 Debug 빌드로 확인했다. 내장 번들에서는 로그인·마일리지 조회·지도 진입·위치 권한 거부·Naver 로고와 실제 주유소/클러스터 표시가 확인됐다. 로그인 계정 외의 사용자 데이터 변경·기기 데이터 초기화는 수행하지 않았다.
+- iOS 빌드 차단: CocoaPods가 NMapsMap 3.23.2·NMapsGeometry 1.0.2를 설치하고 네이버 모듈 자동 연결을 완료했다. 실제 시뮬레이터 Debug 빌드는 ExpoModulesJSI의 SwiftPM 패키지가 요구하는 Swift tools 6.2.0과 설치된 Xcode 16.4의 Swift tools 6.1.0 차이로 실패했다. [실제 오류 로그](/private/tmp/hayan-naver-ios-xcodebuild-quiet.log). 새 Xcode에서 재빌드하기 전까지 iOS의 실제 지도 표시·터치·위치 권한은 미검증이다. 컴파일러 요구사항을 낮추거나 SDK 소스를 패치하지 않았다.
+- 인증 검증 경계: 실제 Android의 네이티브 로그와 화면에서 `NaverMap: Authorization failed: [401] Unauthorized client`를 확인했다. 최종 APK에서 `ST2140S / 1,400L`·`HG1000S / 1,500L`과 클러스터 수가 잘리지 않고 표시됐지만, 타일이 없는 격자 위에 오버레이만 표시되므로 지도 표시 완료로 처리하지 않는다([최종 화면](/Users/sangkun/.codex/visualizations/2026/10/06/01a1105e-e103-7010-aded-9c4acdfd5419/naver-map-2026-10-08/android-navermap-final-auth-error.png)). 인증 실패 상태에서 마커를 탭했을 때 정보창 열림을 확인하지 못했다. 인증 실패와의 관계는 미확정이며, 인증 정상화 후 지도 이동·확대·마커/클러스터 선택·정보창·현재 위치·길안내를 다시 검증해야 한다. Mobile Dynamic Map 사용 설정·Client ID·플랫폼 식별자 등록 중 정확한 거절 원인은 콘솔 확인이 필요하다. SDK 2.9.0은 일반 인증 실패 콜백을 JavaScript에 제공하지 않는다. 빈 Client ID는 기존 오류 안내로 처리하지만, 잘못된 키 또는 미등록 플랫폼 식별자는 실제 앱의 지도 타일·네이티브 로그로 검증해야 한다. Naver Cloud 콘솔 등록 조회는 로그인 승인이 없다는 자동 승인 검토 사유로 차단돼 변경하지 않았다. 키 재발급·유료 서비스 설정·클라우드 빌드·OTA·스토어 배포·외부 발송은 수행하지 않았다.
+- 정리: QA에서 실행한 Metro를 종료했다. 임시로 APK에 내장한 JavaScript·에셋 입력은 `/private/tmp/hayan-naver-embedded-final-build-inputs`에 보존하고 생성된 Android 소스에서 제거해 다음 정상 빌드에 오래된 번들이 섞이지 않도록 했다. 테스트 APK는 `android/app/build/outputs/apk/debug/app-debug.apk`에 남아 있다. 원래 추적하지 않는 `ios/`·`android/` 생성 결과는 커밋 대상이 아니며, 추적 파일의 브랜치·커밋·푸시는 만들지 않았다.
+
+이번 변경의 리뷰 순서는 다음과 같다. 기존 날짜·사진·어드민/EAS 변경은 이번 지도 전환의 변경 파일로 포함하지 않는다.
+
+1. [MapCanvas.tsx](/Users/sangkun/nocoders/hpluseco/hpluseco-app/components/map/MapCanvas.tsx), [StationMarker.tsx](/Users/sangkun/nocoders/hpluseco/hpluseco-app/components/map/StationMarker.tsx): 기존 지도 계약·영역 변환·네이티브 마커 실측과 비트맵 갱신. Android SDK의 DP→픽셀 정수 변환으로 라벨이 잘리지 않도록 실측 크기를 올림한다.
+2. [app.config.ts](/Users/sangkun/nocoders/hpluseco/hpluseco-app/app.config.ts), [app.json](/Users/sangkun/nocoders/hpluseco/hpluseco-app/app.json), [.env.example](/Users/sangkun/nocoders/hpluseco/hpluseco-app/.env.example): Naver Client ID 주입·Maven 저장소·승인된 iOS 식별자와 설정 안내. `app.json`의 이번 변경은 iOS Bundle ID 한 항목이다.
+3. [package.json](/Users/sangkun/nocoders/hpluseco/hpluseco-app/package.json), [pnpm-lock.yaml](/Users/sangkun/nocoders/hpluseco/hpluseco-app/pnpm-lock.yaml): 지도 의존성 교체·빌드 plugin·전용 네이티브 실행 명령.
+4. [stationsApi.test.mjs](/Users/sangkun/nocoders/hpluseco/hpluseco-app/tests/stationsApi.test.mjs): 기존 주유소/API 테스트와 네이버 어댑터·빈 키·마커 크기(소수점 포함) 회귀 검사.
+5. [AGENTS.md](/Users/sangkun/nocoders/hpluseco/hpluseco-app/AGENTS.md), [handover.md](/Users/sangkun/nocoders/hpluseco/hpluseco-app/docs/handover.md), [development-notes.md](/Users/sangkun/nocoders/hpluseco/hpluseco-app/docs/development-notes.md): 현재 지도 정책·빌드 방법·플랫폼별 완료 및 미검증 범위.
+
+
+## 2026-10-08 — 새 Maps Client ID 적용·Android 클러스터 종료 수정
+
+- 설정: 사용자가 새 Maps Application의 Client ID를 제공해 Git 제외 `.env.local`·`.env.prod`의 `EXPO_PUBLIC_NAVER_MAP_CLIENT_ID` 한 항목만 교체했다. 키 값은 기록하지 않는다. 최신 콘솔의 API 선택 이름은 `Dynamic Map`이며 웹·iOS·Android에서 공용으로 사용한다([공식 등록 가이드](https://guide.ncloud-docs.com/docs/application-maps-app-vpc)). 공개 Expo config와 생성된 Android Manifest·iOS plist의 값이 새 env와 일치하고 앱 식별자가 `com.hayan100.app`임을 확인했다. 클라우드 콘솔·Railway·EAS 환경은 변경하지 않았다.
+- 인증 확인: 새 Android APK의 실제 지도 타일, 실데이터 주유소 라벨·클러스터, 서울로 설정한 에뮬레이터의 현재 위치 표시를 확인했다. 주유소 탭 시 지도 확대·이동과 상세창 열림, 배경 탭 시 닫힘도 확인했다([지도 화면](/Users/sangkun/.codex/visualizations/2026/10/06/01a1105e-e103-7010-aded-9c4acdfd5419/naver-map-2026-10-08/android-new-key-map.png)). 웹은 임시 `http://localhost:4000` SDK 확인 페이지에서 새 키의 실제 지도 타일을 확인했다. `127.0.0.1:4000`에서는 인증 실패를 관찰했다. 운영 웹 URL은 이번에 검증하지 않았다. 기존 키의 정확한 등록 상태는 알 수 없지만 새 키 적용 뒤 Android `401 Unauthorized client`는 해소됐다.
+- 추가 오류·수정: Android에서 주유소 3곳 클러스터를 선택하면 GLThread의 `MapRenderer.nativeRender()`가 `bitmap decoding: could not lock pixels`·JNI SIGABRT로 종료됐다([수정 전 로그](/private/tmp/hayan-naver-before-bitmap-fix-crash.log)). wrapper 2.9.0의 `removeCustomView()`가 렌더러가 참조 중인 bitmap을 즉시 `recycle()`하는 경로였다. [Naver SDK의 bitmap 변경 금지 계약](https://navermaps.github.io/android-map-sdk/reference/com/naver/maps/map/overlay/OverlayImage.html#fromBitmap(android.graphics.Bitmap))에 맞춰 즉시 해제 대신 참조만 null로 놓는 pnpm 패치를 추가했다. 기존 UI·마커 모양·API는 바꾸지 않았다. 첫 재빌드는 자동 연결 캐시의 이전 물리 경로 때문에 수정이 반영되지 않았고 동일 종료가 재현됐다. 생성 캐시를 `/private/tmp/hayan-naver-old-autolinking-before-patch`로 보존한 뒤 재생성했다. 최종 컴파일 코드에서 recycle 호출 제거와 참조 해제를 확인했다([바이트코드](/private/tmp/hayan-naver-patched-bytecode.txt)).
+- 재검증: 최종 Android 빌드 성공([로그](/private/tmp/hayan-naver-bitmap-fix-relinked-build.log)), 지도/API 테스트 16개·타입 검사·diff 검사 통과. 실제 패치 APK에서 클러스터 3곳 목록→개별 주유소 상세 전환을 확인한 뒤, 지도 재진입부터 같은 경로를 추가 2회 반복해 통과했다([반복 기록](/private/tmp/hayan-naver-patched-repeat-qa-final.log), [최종 상세 화면](/Users/sangkun/.codex/visualizations/2026/10/06/01a1105e-e103-7010-aded-9c4acdfd5419/naver-map-2026-10-08/android-new-key-cluster-selection-fixed.png)). 최종 프로세스는 살아 있으며 Naver 인증 실패·치명 오류가 각 0건이었다. 온라인 `expo install --check`는 기존 Expo 57 패치 불일치로 여전히 실패한다. 오프라인 검사의 성공 메시지는 정확한 버전 정합성 근거로 사용하지 않았다.
+- 남은 범위: iOS는 Xcode 16.4·Swift 6.1 계열인 것을 재확인했고, 앞서 확인한 ExpoModulesJSI의 Swift tools 6.2 요구로 실제 지도 검증은 여전히 불가하다. 이번에는 같은 실패 빌드를 반복하지 않았다. 실제 기기의 GPS 정확도·TMAP 목적지 연결·손가락 핀치/드래그·장시간 스트레스는 미검증이다. 새 키 확인과 Android 회귀 범위에 집중했으며 SMS·메일·신청·정산 데이터 변경은 하지 않았다.
+
+이번 후속 변경 리뷰 순서: `.env.local`·`.env.prod`(Git 제외 키 교체) → `patches/@mj-studio__react-native-naver-map@2.9.0.patch`(bitmap 수명 수정) → `pnpm-workspace.yaml`·`pnpm-lock.yaml`(재현 가능한 패치 적용) → `AGENTS.md`·`docs/handover.md`·본 기록(최신 설정명·플랫폼별 검증과 제한).
+
+정리: 웹 확인용 임시 서버를 종료했다. 최종 APK는 유지하고 QA 전용 내장 JS·에셋 37개는 `/private/tmp/hayan-naver-new-key-embedded-build-inputs`로 옮겨 생성 소스에 남기지 않았다. 브랜치·커밋·배포는 만들지 않았다.
+
+## 2026-10-10 — Xcode 업데이트 후 iOS 빌드 복구
+
+- 사용자 조치·환경: 사용자가 macOS와 Xcode를 업데이트하고 라이선스에 동의했다. AI가 macOS 27.0.1·Xcode 27.0, `simctl help`와 Xcode 초기 설정 검사 성공을 확인했다. 앞서 기록한 Xcode 16.4·Swift 도구 버전 문제는 해소됐다.
+- 원인: AI가 시작한 빌드와 사용자의 `pnpm ios`가 같은 DerivedData에서 겹쳐 `build.db` 잠금이 발생했다. 기존 빌드 종료와 잠금 해제를 확인했다. 이후 단독 빌드의 별도 오류는 Expo UI 57.0.17이 사용하는 `ContentOriginRegistry`·`setContentOrigin`·`clearContentOrigin` API가 설치된 Expo Core 57.0.11에 없는 버전 불일치였다. 웹 번들만으로는 확인되지 않는 Swift 컴파일 단계의 오류였다.
+- 수정: 직접 의존성은 `expo`만 `~57.0.13`에서 `~57.0.21`로 조정했다. 잠금 파일은 Expo 57.0.21·Expo Core 57.0.21을 선택하고 CocoaPods를 갱신했다. Expo UI 버전과 기존 네이버 지도 2.9.0 패치·해시를 보존했다. UI 코드·환경 파일·서버 설정은 변경하지 않았다.
+- 검증: Xcode 27의 iPhone 16 Pro 시뮬레이터 빌드가 오류 0건으로 성공했고 `com.hayan100.app` 설치·열기 명령도 성공했다([빌드 로그](/private/tmp/hayan-ios-core-fix-build.log)). 마일리지·지도 API 테스트 40개, TypeScript, 공개 Expo 설정, diff 검사가 통과했다. 온라인 `expo install --check`는 기존 SDK 57 권장 패치 불일치 15개로 여전히 실패하며 전체 의존성을 일괄 갱신하지 않았다.
+- 한계·정리: Sentry 디버그 심볼 스크립트의 의존성 경고 1건은 남아 있지만 빌드를 막지 않았다. `--no-bundler`로 검증했으므로 앱 내부 지도·로그인·사진·날짜 동작은 이번 빌드 성공에 포함하지 않는다. Android 재빌드·실기기·운영 배포는 수행하지 않았다. AI가 실행한 빌드는 종료됐고 Metro 서버는 시작하지 않았다. 기존 사용자 변경을 보존했으며 브랜치·커밋은 만들지 않았다.
+
+## 2026-10-10 — iOS 로그인 API 주소 수정
+
+- 증상·원인: 사용자 iOS 화면의 네트워크 오류를 확인했다. 실행 중인 Metro 프로세스에는 운영 API 환경 변수가 전달됐지만, 실제 iOS 번들의 Expo 가상 환경 모듈에는 `.env.local`의 예전 LAN API 주소가 남아 있었다. 앱의 `getApiUrl()`은 이 모듈 값을 사용했다. 운영 API의 비인증 세션 조회는 정상적인 `401 INVALID_SESSION`을 반환했고, 로컬 Mac의 8080 포트에는 서버가 없었다.
+- 수정: AI가 Git 제외 `.env.local`의 `EXPO_PUBLIC_API_URL` 한 줄만 `https://api.hayan100.kr`로 변경했다. 다른 키와 웹 전용 API 주소는 보존했다. Metro 반영 후 실제 iOS 번들에서 운영 API 주소를 다시 확인했다. 실행 중인 사용자 Metro를 종료하거나 네이티브 앱을 재빌드하지 않았다.
+- 검증: 사용자가 제공한 테스트 계정으로 iPhone 16 Pro 시뮬레이터에서 실제 로그인에 성공했다. 로그인 화면에서 마일리지 화면으로 이동하고 테스트 기사 인사말·누적 0마일·2026-10-07 대기 신청 내역이 표시됐다([확인 화면](/Users/sangkun/.codex/visualizations/2026/10/06/01a1105e-e103-7010-aded-9c4acdfd5419/ios-login-2026-10-10.png)). 비밀번호와 토큰은 기록하지 않았다. SMS·메일·신청·정산 변경은 수행하지 않았으며 Android 로그인·지도는 이번 확인 범위에 포함하지 않았다.
+
+## 2026-10-11 — iOS 마일리지 조회 날짜 입력 수정
+
+- 승인 범위: 사용자가 와이어프레임을 확인한 뒤 iOS 시작일·종료일의 달력 열기, 단일 기존 배경, `YYYY-MM-DD` 표시와 한글 달력을 승인했다. 기존 높이 52·가로 간격 4·동일 너비·색상·글꼴을 재사용한다.
+- 원인·수정: 기존 iOS compact DateTimePicker가 OS 기본 영문 날짜와 내부 회색 배경을 그렸다. 내부 SwiftUI Host의 너비도 지정되지 않아 보이는 날짜와 터치 영역이 일치하지 않을 수 있었다. `MileageDateField`의 iOS 분기에서 크기가 지정된 Host와 기존 Pressable/Text를 사용하고, 설치된 Expo UI의 Popover·DatePicker로 한글 기본 달력을 연다. 날짜 선택 시 닫고 바깥을 눌러 닫을 때는 값을 바꾸지 않는다. SwiftUI는 iOS에서만 로드하며 Android UTC 날짜 처리·웹 입력·API 내부 날짜 형식은 유지한다.
+- 자동 검증: 수정 전 iOS 회귀 검사의 실패를 확인하고 수정 후 마일리지 UI 25개·API 8개, `pnpm typecheck`, `git diff --check`를 통과했다. 시작일·종료일의 표시·열기·닫기·동일 날짜·윤년·연말/연초·서머타임 경계를 서울/로스앤젤레스/키리티마티 시간대에서 검사했다. 실행 중인 기존 Metro로 iOS·Android·웹 개발 번들을 모두 생성했다.
+- 시뮬레이터 확인: 처음에는 별도 조작과 겹쳐 검증을 중단했으며, 사용자가 단독 조작을 허용한 뒤 iPhone 16 Pro에서 시작일·종료일 열기를 각각 다시 검증했다. `2026년 10월`과 `일·월·화·수·목·금·토`의 한글 표시를 화면으로 확인했다([한글 달력](/Users/sangkun/.codex/visualizations/2026/10/10/01a12652-fe93-7383-be0a-68f600d12936/ios-date-calendar-korean-2026-10-11.png)). 시작일 10월 2일·종료일 10월 15일을 선택하면 달력이 닫히고 `2026-10-02`·`2026-10-15`가 반영된다. 두 달력을 각각 다시 열어 선택일 유지, 변경 없이 바깥을 눌러 닫은 뒤 날짜가 감소하지 않음을 확인했다. 조회 조건까지 닫았다 다시 열어도 값이 유지됐다. 두 입력의 터치 영역은 각각 172×52이며 같은 단일 배경을 사용한다([최종 화면](/Users/sangkun/.codex/visualizations/2026/10/10/01a12652-fe93-7383-be0a-68f600d12936/ios-date-fields-verified-2026-10-11.png)). 추가 코드 수정은 필요하지 않았다. 실제 iPhone·Android 화면 재검증은 수행하지 않았다. 네이티브 재빌드·새 의존성·배포·다른 기능 변경은 하지 않았다.
+- 글자 크기 후속 조정: 사용자가 90% 축소 와이어프레임을 승인해 iOS DatePicker에 `scaleEffect(0.9)`를 적용했다. 달력 내부 숫자·월·요일·화살표를 함께 줄이고 기존 팝업 영역과 날짜 입력칸 크기는 유지한다. iPhone 16 Pro 시뮬레이터에서 실제 축소 표시·한글 표시·시작일 10월 3일/종료일 10월 16일 선택·이전/다음 달 이동·변경 없이 닫은 뒤 종료일 보존을 확인했다([90% 축소 화면](/Users/sangkun/.codex/visualizations/2026/10/10/01a12652-fe93-7383-be0a-68f600d12936/ios-calendar-90-percent-2026-10-11.png)). 타입 검사·기존 마일리지 테스트 25개·diff 검사가 통과했다. 실제 iPhone의 손가락 터치 편의성은 미검증이다.
+
+
+## 2026-10-11 — 잔여 QA 항목 사용자 상태 갱신
+
+- 기준은 이 대화에서 정리한 35개 항목의 번호다. 사용자는 1번(웹 다중 탭 계정 전환 뒤 이전 폼 저장, 과거 QA-09)과 5번(탈퇴 안내 문구와 이력 보존 정책 차이)을 문제 목록에서 제외하도록 결정했다. 두 항목은 수정 완료로 바꾸지 않고 사용자 결정에 따른 대상 제외로 취급하며 과거 재현 기록은 보존한다.
+- 사용자가 2번(iOS 조회 조건 달력), 3번(iOS 문서 딥링크 방문 후 로그아웃 경로), 4번(iOS·Android 404 문의 이메일)을 해결했다고 확인했다. 잔여 문제 목록에서 제거한다. 2번의 별도 구현·시뮬레이터 검증 기록은 위 날짜 입력 수정 항목을 따른다. 이번 상태 정리 과정에서 3·4번을 별도로 재검증하지 않았다.
+- 21번의 iOS 네이티브 빌드·설치는 2026-10-10 완료했고 운영 API 로그인·마일리지 조회도 확인했다. iOS 지도 타일·마커·권한 검증은 남는다. 이미 확인한 빌드·로그인을 미완료 항목으로 다시 올리지 않는다.
+- 나머지 6~10번은 관찰 내용의 현재 재현 여부 확인, 11~25번과 31~33번은 미완료 기능 흐름·기기 검증이 중심이다. 26~30번과 34~35번에는 개발 실행 문제 진단, 의존성·자동 검사·환경/문서·배포·운영 준비도 포함되므로 전부 단순 화면 검증으로 분류하지 않는다. SMS·메일 외부 발송 금지와 실제 탈퇴·승인·정산의 기존 보류 범위를 유지한다. 이번에는 기록만 갱신했고 코드 수정이나 새 앱 QA는 실행하지 않았다.
+
 ## 2026-10-11 — iOS 로그인·회원가입 암호 자동완성 비활성화
 
 - 승인 범위: 사용자가 와이어프레임 검토 후 로그인 이메일·비밀번호, 회원가입 이메일·비밀번호·확인의 iOS 자동완성을 끄도록 승인했다. 각 라우트의 기존 입력에 iOS만 `autoComplete="off"`·`textContentType="none"`을 전달한다. 비밀번호 마스킹·검증·API·스타일과 Android/웹의 기존 속성은 유지한다. 공용 입력 컴포넌트와 다른 인증 화면은 변경하지 않았다.
 - 자동 검사: `pnpm typecheck`, 인증 회귀 테스트 19개, `git diff --check`를 통과했다. 실제 JSX 속성 표현식을 iOS·Android·웹으로 평가하는 일회성 assert 검사에서 5개 입력 × 3개 플랫폼의 자동완성 정책과 비밀번호 마스킹 15건을 확인했다.
 - iOS 검증: iPhone 16 Pro / iOS 18.5 시뮬레이터에서 처음에는 기존 실행 상태의 노란 `Automatic Strong Password cover view text`가 남았다. 앱만 종료·재실행한 뒤 비밀번호·확인란에 직접 입력되고 두 입력 모두 마스킹되는 것을 확인했다([화면](/Users/sangkun/.codex/visualizations/2026/10/10/01a12652-fe93-7383-be0a-68f600d12936/ios-password-autofill-disabled-2026-10-11.png)). 이어 잘못된 로그인으로 실제 불일치 오류를 받은 후 회원가입으로 이동했고, 암호 저장 안내 없이 비밀번호 입력란에 포커스할 수 있으며 추천 화면이 입력란을 덮지 않음을 확인했다.
 - 한계: 로그인 키보드의 OS 기본 `Passwords` 버튼과 일반 타이핑 추천은 남아 있다. 앱의 자동완성 힌트를 비활성화한 것이며 OS가 제공하는 모든 수동 암호 메뉴를 제거한 것은 아니다. 실물 iPhone·다른 iOS 버전·Android/웹 화면은 이번에 검증하지 않았다. 개발 경고 배너는 검증 중 닫았으며 별도 원인 수정을 하지 않았다. 회원가입 제출·SMS·메일 발송은 하지 않았고 테스트 계정은 로그아웃 상태로 남겼다. 기존 Metro는 종료하지 않았다.
+
+
+## 2026-10-11 — 투명 PNG·문서 열기 수정과 격리 시뮬레이터 QA
+
+- 사용자 요청 범위: 투명 PNG 저장·표시와 약관/마케팅 문서 열기를 수정하고, iOS/AOS에서 가능한 QA를 추가 실행했다. 기존 변경을 보존했고 별도 브랜치·커밋·배포는 만들지 않았다. 새로 발견한 날짜 모달 정지·키보드·큰 글자 레이아웃은 수정하지 않고 결과에 구분했다.
+- 사진 수정: 서버 photo worker가 JPEG 인코딩 전에 투명 영역을 흰색에 합성한다. Android는 4096px 초과 PNG를 앱에서 먼저 JPEG로 변환할 때 투명 영역이 검정으로 바뀌는 추가 문제가 재현되어, 앱의 PNG 리사이즈 결과를 PNG로 유지하도록 수정했다. 다른 형식의 기존 JPEG 변환·50MiB 검증·캐시 정리는 유지했다.
+- 실제 저장 검증: 같은 4097×3072 fixture를 수정된 iOS/AOS native 앱에서 격리 API로 등록했다. 원본 PNG의 투명 영역 alpha 0과 최종 JPEG의 흰 배경 RGB 255·검은 도형 RGB 0을 모두 확인했다. AOS 원본은 4096×3071, iOS는 4096×3072이며 긴 변 제한을 만족한다. 운영 서버 미배포 상태이고 기존 검정 JPEG를 재처리하지 않았다.
+- 문서 수정: LegalDocumentPage의 Head를 web에서만 렌더해 native Handoff 오류 경로를 제거했다. 기존 문서·링크·레이아웃을 유지하고 iOS/AOS의 문서 진입·복귀, iOS 가입 입력 보존을 확인했다. 기존 legacy redirect·native/web 링크 테스트를 보존했다.
+- 검증 경계: 사진 회귀 25/25·법률 문서/메타데이터 7/7·앱 타입 검사를 통과했다. 전체 앱 101/102는 QA 문서 중복 ID 1건 실패이며, 서버 격리 e2e 688/688을 통과했다. 네이티브 QA는 물리적 소스 복사본의 별도 Metro와 임시 PostgreSQL/loopback 저장소/provider stub을 사용했다. 실제 SMS·메일·유료 OCR·추가 운영 신청은 실행하지 않았다. 최종 플랫폼별 범위와 실패·보류·환경 복구 결과는 [전체 시뮬레이터 QA 결과](/Users/sangkun/.codex/visualizations/2026/10/06/01a1105e-e103-7010-aded-9c4acdfd5419/qa-2026-10-11/full-simulator/results.md)를 따른다.

@@ -6,9 +6,9 @@ import * as authApi from '../utils/authApi.ts';
 
 const deferred = () => { let resolve, reject; const promise = new Promise((a, b) => { resolve = a; reject = b; }); return { promise, resolve, reject }; };
 const nodes = tree => !tree || typeof tree !== 'object' ? [] : [tree, ...[tree.props?.children].flat(Infinity).flatMap(nodes)];
-function load(path, imports) {
+function load(path, imports, testExports = '') {
   const exports = {};
-  const source = ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
+  const source = ts.transpileModule(readFileSync(new URL(path, import.meta.url), 'utf8') + testExports, { compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022 } }).outputText;
   new Function('require', 'exports', 'localStorage', source)(name => { assert.ok(name in imports, `unexpected import ${name}`); return imports[name]; }, exports, imports.localStorage);
   return exports;
 }
@@ -33,7 +33,9 @@ function mount(path, extras = {}, params = {}, renderHistory = false) {
     'expo-router': { useFocusEffect: fn => react.useEffect(() => focused ? fn() : undefined, [fn, focused]), useRouter: () => ({ push: url => navigation.push(url), replace: url => navigation.push(url) }), useLocalSearchParams: () => params, Stack: { Screen: 'Stack.Screen' }, Redirect: 'Redirect' },
     'react-native': native,
     'expo-linear-gradient': { LinearGradient: 'Gradient' },
-    '@expo/ui/community/datetime-picker': { default: 'DateTimePicker' },
+    '@expo/ui/community/datetime-picker': { __esModule: true, default: 'DateTimePicker' },
+    '@expo/ui/swift-ui': { Host: 'Host', RNHostView: 'RNHostView', DatePicker: 'DatePicker', Popover: Object.assign(function Popover() {}, { Trigger: 'Popover.Trigger', Content: 'Popover.Content' }) },
+    '@expo/ui/swift-ui/modifiers': { datePickerStyle: style => ({ style }), environment: (key, value) => ({ key, value }), scaleEffect: scale => ({ scale }) },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0 }), SafeAreaProvider: 'SafeAreaProvider', SafeAreaView: 'SafeAreaView' },
     '../../constants/theme': { colors: {}, typography: {}, webAppFrame: {} },
     '../../components/AppScreen': { AppScreen: 'AppScreen' },
@@ -50,8 +52,8 @@ function mount(path, extras = {}, params = {}, renderHistory = false) {
     '../../utils/mileagePhotos': { prepareMileageResubmission: (selection, submissionVersion) => pending(preparations, { selection, submissionVersion }), prepareMileageSubmission: selection => pending(preparations, { selection }), mileagePhotoPreview: async blob => blob },
     ...extras,
   };
-  const module = load(path, imports);
-  const route = module.default ?? module.MileagePhotoForm;
+  const module = load(path, imports, extras.componentName ? `\nexport { ${extras.componentName} };` : '');
+  const route = extras.componentName ? module[extras.componentName] : module.default ?? module.MileagePhotoForm;
   const component = () => {
     const tree = route(extras.formProps);
     if (!renderHistory) return tree;
@@ -70,6 +72,87 @@ function mount(path, extras = {}, params = {}, renderHistory = false) {
 }
 const id = '11111111-1111-4111-8111-111111111111';
 const item = (id, status = 'pending') => ({ id, status, submittedAt: '2026-09-22T03:00:00Z', mileageAmount: null });
+
+test('iOS date fields open a Korean calendar, keep local dates and dismiss without changing the query', () => {
+  const originalTZ = process.env.TZ;
+  try {
+    for (const zone of ['Asia/Seoul', 'America/Los_Angeles', 'Pacific/Kiritimati']) {
+      process.env.TZ = zone;
+      for (const label of ['조회 시작일', '조회 종료일']) {
+        const formProps = { label, value: '2026. 10. 01', onChange: next => { formProps.value = next; } };
+        const page = mount('../app/mileage/index.tsx', {
+          componentName: 'MileageDateField', formProps,
+          'react-native': { ...native, Platform: { OS: 'ios' } },
+        });
+        const query = () => api.mileageQuery({ period: 'custom', sort: 'latest', startDate: formProps.value, endDate: formProps.value });
+        const originalQuery = query();
+        assert.equal(page.get('Text').children, '2026-10-01');
+        assert.equal(page.get('Pressable').accessibilityLabel, label);
+        assert.deepEqual(page.get('Pressable').accessibilityValue, { text: '2026-10-01' });
+        assert.equal(page.get('Popover').isPresented, false);
+        page.get('Pressable').onPress();
+        assert.equal(page.get('Popover').isPresented, true);
+        assert.ok(page.get('DatePicker').modifiers.some(modifier => modifier.key === 'locale' && modifier.value === 'ko_KR'));
+        page.get('Popover').onIsPresentedChange(false);
+        assert.equal(page.get('Popover').isPresented, false);
+        assert.deepEqual(query(), originalQuery);
+        for (const value of ['2024. 02. 29', '2026. 03. 08', '2026. 12. 31', '2027. 01. 01']) {
+          page.get('Pressable').onPress();
+          const [year, month, day] = value.split('. ').map(Number);
+          page.get('DatePicker').onDateChange(new Date(year, month - 1, day));
+          assert.equal(formProps.value, value);
+          assert.equal(page.get('Text').children, value.replaceAll('. ', '-'));
+          assert.equal(page.get('Popover').isPresented, false);
+          page.get('Pressable').onPress();
+          const selected = page.get('DatePicker').selection;
+          assert.deepEqual([selected.getFullYear(), selected.getMonth() + 1, selected.getDate()], [year, month, day]);
+          page.get('DatePicker').onDateChange(selected);
+          assert.equal(formProps.value, value);
+        }
+        page.unmount();
+      }
+    }
+  } finally {
+    if (originalTZ === undefined) delete process.env.TZ; else process.env.TZ = originalTZ;
+  }
+});
+
+test('Android calendar confirmation preserves start/end dates across time zones and boundaries', () => {
+  const originalTZ = process.env.TZ;
+  try {
+    for (const zone of ['Asia/Seoul', 'America/Los_Angeles', 'Pacific/Kiritimati']) {
+      process.env.TZ = zone;
+      for (const label of ['조회 시작일', '조회 종료일']) {
+        for (const value of ['2026. 10. 01', '2026. 12. 31', '2027. 01. 01', '2024. 02. 29', '2026. 03. 08']) {
+          const formProps = { label, value, onChange: next => { formProps.value = next; } };
+          const page = mount('../app/mileage/index.tsx', {
+            componentName: 'MileageDateField', formProps,
+            'react-native': { ...native, Platform: { OS: 'android' } },
+          });
+          const filter = () => ({ period: 'custom', sort: 'latest', startDate: formProps.value, endDate: formProps.value });
+          const originalQuery = api.mileageQuery(filter());
+          for (let confirmation = 0; confirmation < 2; confirmation++) {
+            page.get('Pressable').onPress();
+            const picker = page.get('DateTimePicker');
+            assert.equal(picker.value.toISOString(), `${value.replaceAll('. ', '-')}T00:00:00.000Z`);
+            // Material's date picker returns the selected calendar day at UTC midnight.
+            picker.onValueChange({}, new Date(picker.value.toISOString().slice(0, 10)));
+            assert.equal(formProps.value, value); assert.equal(page.get('DateTimePicker'), undefined);
+            assert.deepEqual(api.mileageQuery(filter()), originalQuery);
+          }
+          page.get('Pressable').onPress();
+          page.get('DateTimePicker').onValueChange({}, new Date('2027-01-02T00:00:00.000Z'));
+          assert.equal(formProps.value, '2027. 01. 02');
+          page.get('Pressable').onPress(); page.get('DateTimePicker').onDismiss();
+          assert.equal(formProps.value, '2027. 01. 02'); assert.equal(page.get('DateTimePicker'), undefined);
+          page.unmount();
+        }
+      }
+    }
+  } finally {
+    if (originalTZ === undefined) delete process.env.TZ; else process.env.TZ = originalTZ;
+  }
+});
 
 test('balance shows real zero, refreshes on focus and stays independent of history filters and pages', async () => {
   const page = mount('../app/mileage/index.tsx');
@@ -460,18 +543,18 @@ test('photo preparation enforces format/size, converts only past thresholds, and
   class File {
     constructor(...parts) { this.uri = parts.join('/'); }
     get exists() { return files.has(this.uri); }
-    get size() { return files.get(this.uri) ?? 1024; }
-    copy(target) { files.set(target.uri, this.size); }
+    get size() { return files.get(this.uri) ?? (this.uri.startsWith('picker/') ? 1024 : 0); }
+    async copy(target) { await new Promise(resolve => setImmediate(resolve)); files.set(target.uri, this.size); }
     delete() { removed.push(this.uri); files.delete(this.uri); }
   }
   const photos = load('../utils/mileagePhotos.ts', {
     'expo-crypto': { randomUUID: () => `uuid-${++sequence}` },
     'expo-file-system': { File, Paths: { cache: 'cache' } },
-    'expo-image-manipulator': { SaveFormat: { JPEG: 'jpeg' }, ImageManipulator: { manipulate(uri) {
+    'expo-image-manipulator': { SaveFormat: { JPEG: 'jpeg', PNG: 'png' }, ImageManipulator: { manipulate(uri) {
       const conversion = { uri }; conversions.push(conversion);
       return { resize(size) { conversion.resize = size; }, release() {}, async renderAsync() {
         if (failRender) throw new Error('bad decoder');
-        return { release() {}, async saveAsync(options) { conversion.options = options; const uri = `cache/converted-${sequence++}.jpg`; files.set(uri, 1024); return { uri, width: 4096, height: 2048 }; } };
+        return { release() {}, async saveAsync(options) { conversion.options = options; const uri = `cache/converted-${sequence++}.${options.format}`; files.set(uri, 1024); return { uri, width: 4096, height: 2048 }; } };
       } };
     } } },
     'react-native': { Platform: { OS: 'ios' } }, './authApi': authApi,
@@ -479,12 +562,22 @@ test('photo preparation enforces format/size, converts only past thresholds, and
   const image = { uri: 'picker/original.jpg', fileName: 'original.jpg', mimeType: 'image/jpeg', fileSize: 10*1024*1024, width: 4096, height: 2048 };
   const first = await photos.prepareMileageSubmission({ photoMode: 'separate', receipt: image, dashboard: image });
   assert.equal(conversions.length, 0); assert.notEqual(first.receipt.uri, image.uri);
+  for (const photo of [first.receipt, first.meter]) {
+    assert.ok(photo.file instanceof File, 'native multipart must receive the copied File, not a URI descriptor');
+    assert.equal(photo.file.uri, photo.uri); assert.equal(photo.file.size, 1024);
+  }
   first.dispose(); assert.equal(removed.length, 2); assert.ok(!removed.includes(image.uri));
   const second = await photos.prepareMileageSubmission({ photoMode: 'separate', receipt: { ...image, fileSize: image.fileSize+1 }, dashboard: { ...image, height: 4097 } });
   assert.equal(conversions.length, 2); assert.equal(conversions[0].resize, undefined);
   assert.deepEqual(conversions[1].resize, { height: 4096 });
   assert.deepEqual(conversions[0].options, { compress: .9, format: 'jpeg' });
+  assert.ok(second.receipt.file instanceof File); assert.ok(second.meter.file instanceof File);
   second.dispose(); assert.equal(removed.length, 4);
+  const png = await photos.prepareMileageSubmission({ photoMode: 'single', receipt: { ...image, fileName: 'original.png', mimeType: 'image/png', width: 4097 }, dashboard: null });
+  assert.deepEqual(conversions[2].resize, { width: 4096 });
+  assert.deepEqual(conversions[2].options, { compress: .9, format: 'png' });
+  assert.equal(png.receipt.type, 'image/png'); assert.equal(png.receipt.name, 'receipt.png');
+  png.dispose(); assert.equal(files.size, 0);
   assert.equal(photos.validateMileagePhoto({ ...image, mimeType: 'image/webp' }), 'image/webp');
   for (const [asset, code] of [[{ ...image, mimeType:'image/gif' }, 'UNSUPPORTED_PHOTO_TYPE'], [{ ...image, fileSize: 50*1024*1024+1 }, 'PHOTO_TOO_LARGE'], [{ ...image, fileSize: undefined }, 'PHOTO_SIZE_UNAVAILABLE'], [{ ...image, width: 0 }, 'INVALID_PHOTO']]) {
     assert.throws(() => photos.validateMileagePhoto(asset), { code });
@@ -492,6 +585,7 @@ test('photo preparation enforces format/size, converts only past thresholds, and
   assert.equal(photos.validateMileagePhoto({ ...image, fileSize: 50*1024*1024 }), 'image/jpeg');
   const replacement = await photos.prepareMileageResubmission({ photoMode: 'separate', receipt: null, dashboard: image }, 'a'.repeat(64));
   assert.equal(replacement.receipt, undefined); assert.equal(replacement.submissionVersion, 'a'.repeat(64));
+  assert.ok(replacement.meter.file instanceof File);
   assert.equal(files.size, 1); replacement.dispose(); assert.equal(files.size, 0);
   await assert.rejects(photos.prepareMileageResubmission({ photoMode: 'separate', receipt: null, dashboard: null }, 'a'.repeat(64)), { code: 'PHOTO_REQUIRED' });
   await assert.rejects(photos.prepareMileageResubmission({ photoMode: 'single', receipt: null, dashboard: image }, 'a'.repeat(64)), { code: 'PHOTO_REQUIRED' });

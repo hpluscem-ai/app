@@ -536,9 +536,10 @@ function MileageDateField({ label, onChange, value }: {
 }) {
   const [open, setOpen] = useState(false);
   const [year, month, day] = value.split('. ').map(Number);
-  const date = new Date(year, month - 1, day);
+  // Android Material calendars exchange date-only values at UTC midnight.
+  const date = Platform.OS === 'android' ? new Date(Date.UTC(year, month - 1, day)) : new Date(year, month - 1, day);
   const selectDate = (_event: unknown, nextDate: Date) => {
-    onChange(formatLocalDate(nextDate));
+    onChange(Platform.OS === 'android' ? nextDate.toISOString().slice(0, 10).replaceAll('-', '. ') : formatLocalDate(nextDate));
     setOpen(false);
   };
 
@@ -570,10 +571,26 @@ function MileageDateField({ label, onChange, value }: {
   }
 
   if (Platform.OS === 'ios') {
+    // Load SwiftUI only on iOS; the other platforms keep their existing pickers.
+    const { DatePicker, Host, Popover, RNHostView } = require('@expo/ui/swift-ui') as typeof import('@expo/ui/swift-ui');
+    const { datePickerStyle, environment, scaleEffect } = require('@expo/ui/swift-ui/modifiers') as typeof import('@expo/ui/swift-ui/modifiers');
+    const displayValue = value.replaceAll('. ', '-');
+
     return (
-      <View style={styles.customDateInput}>
-        <DateTimePicker display="compact" mode="date" onValueChange={selectDate} value={date} />
-      </View>
+      <Host style={styles.customDateHost} ignoreSafeArea="all">
+        <Popover isPresented={open} onIsPresentedChange={setOpen}>
+          <Popover.Trigger>
+            <RNHostView>
+              <Pressable accessibilityLabel={label} accessibilityRole="button" accessibilityValue={{ text: displayValue }} onPress={() => setOpen(true)} style={styles.customDateInput}>
+                <Text style={styles.customDateText}>{displayValue}</Text>
+              </Pressable>
+            </RNHostView>
+          </Popover.Trigger>
+          <Popover.Content>
+            <DatePicker selection={date} displayedComponents={['date']} onDateChange={(nextDate) => selectDate(undefined, nextDate)} modifiers={[datePickerStyle('graphical'), environment('locale', 'ko_KR'), scaleEffect(0.9)]} />
+          </Popover.Content>
+        </Popover>
+      </Host>
     );
   }
 
@@ -930,6 +947,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 32,
     backgroundColor: colors.gray100,
+  },
+  customDateHost: {
+    height: 52,
+    flex: 1,
   },
   customDateText: {
     ...typography.suitMedium14,

@@ -66,10 +66,12 @@ async function prepareMileagePhotos(selection: PhotoSelection) {
           context.resize(asset.width >= asset.height ? { width: 4096 } : { height: 4096 });
         }
         rendered = await context.renderAsync();
-        const output = await rendered.saveAsync({ compress: 0.9, format: SaveFormat.JPEG });
+        // Keep PNG alpha until the server composites it onto a white background.
+        const format = type === 'image/png' ? SaveFormat.PNG : SaveFormat.JPEG;
+        const output = await rendered.saveAsync({ compress: 0.9, format });
         uri = output.uri;
         owned.push(uri);
-        type = 'image/jpeg';
+        type = format === SaveFormat.PNG ? 'image/png' : 'image/jpeg';
         if (Math.max(output.width, output.height) > 4096) throw new Error('Invalid converted dimensions');
       } finally {
         if (Platform.OS === 'web' && rendered && 'uri' in rendered && typeof rendered.uri === 'string') URL.revokeObjectURL(rendered.uri);
@@ -86,12 +88,12 @@ async function prepareMileagePhotos(selection: PhotoSelection) {
     if (!convert) {
       const copy = new File(Paths.cache, `mileage-${randomUUID()}-${name}`);
       owned.push(copy.uri);
-      new File(uri).copy(copy);
+      await new File(uri).copy(copy);
       uri = copy.uri;
     }
-    const size = new File(uri).size;
-    if (!size || size > MAX_BYTES) throw new AuthApiError('50MB 이하의 이미지만 등록할 수 있습니다.', 'PHOTO_TOO_LARGE');
-    return { uri, name, type };
+    const file = new File(uri);
+    if (!file.size || file.size > MAX_BYTES) throw new AuthApiError('50MB 이하의 이미지만 등록할 수 있습니다.', 'PHOTO_TOO_LARGE');
+    return { uri, name, type, file };
   };
   try {
     const receipt = selection.receipt ? await prepare(selection.receipt, 'receipt') : undefined;
