@@ -104,6 +104,9 @@ importers:
         specifier: 8.0.1
         version: 8.0.1
     devDependencies:
+      '@sentry/cli':
+        specifier: 2.58.4
+        version: 2.58.4
       '@types/navermaps':
         specifier: ^3.9.2
         version: 3.9.2

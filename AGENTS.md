@@ -57,6 +57,7 @@
 
 ## Forms And Shared Resources
 
+- 2026-10-12 사용자가 와이어프레임 검토 후 네이티브 수동 서버 요청 중 화면 중앙의 기본 RN `ActivityIndicator`만 표시하도록 승인했다. 같은 날 후속 요청으로 기존 공용 `colors.overlayScrim` 배경을 적용해 전체 화면을 살짝 어둡게 한다. 새 카드·문구는 추가하지 않는다. 기존 pending 상태로 중복 입력을 차단하며 자동 조회·자동 SMS 확인·시스템 사진 선택에는 적용하지 않는다. 로그아웃·탈퇴는 기존 확인 Modal 안에서 같은 공용 배경의 스피너로 전환한다. Android 소속 선택은 기존 ChevronDownIcon을 입력 오른쪽 16, 수직 중앙에 표시하고, 인증번호 발송과 적립신청은 내용 너비로 한 줄을 유지한다.
 - 이메일·비밀번호·연락처·인증번호 검증은 `utils/validation.ts`에서 관리한다.
 - 입력값 표시는 `utils/inputFormat.ts`에서 관리한다. 휴대폰 번호는 숫자만 받아 `010-0000-0000` 형식으로 자동 변환한다.
 - 2026-09-26 회원가입 이메일과 성함 입력은 공백을 즉시 제거한다. 마이페이지 성함의 기존 입력 정책은 별도다.
@@ -88,7 +89,7 @@
 - `pnpm web`의 기본 포트는 4000이다. 웹은 `EXPO_PUBLIC_WEB_API_URL`이 있으면 우선 사용하고 없으면 공통 `EXPO_PUBLIC_API_URL`을 사용한다. 로컬 웹은 `localhost:4000` → `localhost:8080`, 네이티브는 기존 LAN API 주소를 사용한다. 웹 포트를 바꾸면 서버 `WEB_ORIGINS`의 정확한 Origin도 함께 맞추고 서버를 재시작한다.
 - 일반 알림은 `useAlerts` → `NoticeProvider` → 기존 `NoticeModal`을 사용한다. 회원가입 성공의 확인 콜백은 한 번만 실행하고 취소 불가 동작을 유지한다. 웹 사진 선택은 업로드 카드 클릭 즉시 브라우저 기본 파일 선택창을 연다. 선택용 모달은 사용하지 않고 파일 형식·50MB 검증·미리보기와 네이티브 사진 선택 방식은 유지한다.
 - 2026-09-14 재설정 링크 교체 시 이전 오류 안내가 현재 오류를 가리는 문제를 수정했다. 재설정 화면의 오류는 기존 `NoticeModal`의 동일한 문구·스타일·닫기 규칙을 사용하되 현재 토큰과 포커스 수명에 묶어 화면이 소유한다. 다른 화면의 일반 알림과 회원가입 성공 확인 보호는 유지한다.
-- 웹 지도는 네이버 신규 Maps의 `ncpKeyId`를 `EXPO_PUBLIC_NAVER_MAP_CLIENT_ID`로 전달한다. 2026-10-08 사용자가 와이어프레임 검토 후 iOS·Android도 네이버 지도로 통일하도록 승인했다. 네이티브는 `@mj-studio/react-native-naver-map`과 같은 Client ID를 사용하며, iOS Bundle ID·Android package는 `com.hayan100.app`이다. Naver Cloud Maps의 `Dynamic Map`을 선택하고 각 플랫폼 식별자를 등록한 뒤 Expo Go가 아닌 전용 네이티브 앱을 빌드해야 한다. 네이버 Client Secret은 앱에 넣지 않는다. 2026-09-14 사용자가 로컬 URL 등록과 테스트 Client ID 설정을 요청해 Git 제외 `.env.local`에 반영했다. `http://localhost:4000`의 임시 SDK 확인 페이지에서 실제 지도 표시와 타일 로딩을 확인했다. 플랫폼별 현재 검증 결과는 `docs/development-notes.md`에 구분해 기록한다.
+- 웹 지도는 네이버 신규 Maps의 `ncpKeyId`를 `EXPO_PUBLIC_NAVER_MAP_CLIENT_ID`로 전달한다. 2026-10-08 사용자가 와이어프레임 검토 후 iOS·Android도 네이버 지도로 통일하도록 승인했다. 네이티브는 `@mj-studio/react-native-naver-map`과 같은 Client ID를 사용한다. 2026-10-12 Apple에서 기존 ID의 신규 등록이 거부되어 사용자 요청으로 iOS Bundle ID를 `kr.hayan100.app`으로 변경했으며 Android package는 `com.hayan100.app`을 유지한다. Naver Cloud Maps의 `Dynamic Map`을 선택하고 각 플랫폼 식별자를 등록한 뒤 Expo Go가 아닌 전용 네이티브 앱을 빌드해야 한다. 새 iOS ID의 Apple 등록·Naver Maps 허용 목록 추가는 별도 확인이 필요하다. 네이버 Client Secret은 앱에 넣지 않는다. 2026-09-14 사용자가 로컬 URL 등록과 테스트 Client ID 설정을 요청해 Git 제외 `.env.local`에 반영했다. `http://localhost:4000`의 임시 SDK 확인 페이지에서 실제 지도 표시와 타일 로딩을 확인했다. 플랫폼별 현재 검증 결과는 `docs/development-notes.md`에 구분해 기록한다.
 - 웹 길안내는 데스크톱에서 네이버 길찾기 페이지를 열고, 모바일 웹은 `EXPO_PUBLIC_TMAP_APP_KEY`가 있으면 공식 TMAP Invoke URL로 앱을 연다. 키가 없으면 네이버로 연결한다. 네이티브는 기존 티맵·스토어 연결을 유지한다. 미검증 예시 좌표의 길안내 차단을 유지하고 앱 미설치 여부를 임의로 추측하지 않는다. 2026-09-14 사용자가 설정한 TMAP AppKey를 포함한 Invoke 요청은 공식 TMAP 실행 페이지까지 HTTP 200을 확인했다. 실기기 TMAP 실행과 실제 주유소 목적지 연결은 아직 검증하지 않았다.
 
 ## Current Approved Admin Web Integration
@@ -189,6 +190,8 @@
 - 사진 저장소는 `SUPABASE_S3_ENDPOINT`, `SUPABASE_S3_REGION`, `SUPABASE_STORAGE_BUCKET`, `SUPABASE_S3_ACCESS_KEY_ID`, `SUPABASE_S3_SECRET_ACCESS_KEY`를 모두 서버에만 설정한다. 버킷 생성·공개 설정·실데이터 이전은 배포 전에 별도 확인한다.
 
 ## Verification And Handoff
+
+- 2026-10-12 사용자가 Android/Fold 수정 와이어프레임을 승인했다. 로그인한 Android의 시스템 뒤로가기는 실제 Stack 이력이 있으면 이전 화면, 없으면 `/mileage`, 이미 `/mileage`이면 화면을 유지한다. 기존 탭의 replace 이동과 네이티브 Modal 닫기를 유지한다. 신청의 1장 업로더는 실제 남은 세로 공간에 맞춰 높이를 제한하고 제출 영역과 기존 gap 40을 확보한다. 인증번호 발송 버튼은 한 줄의 내용 너비를 확보하고 연락처 입력이 남은 너비를 사용한다. 누적 카드의 기존 흰색 alpha 0.8을 유지하며 Android 12 이상에서 기존 expo-blur로 배경 블러를 적용한다. 이전 Android에서는 라이브러리의 무블러 대체 동작을 사용한다. 실물 Galaxy Fold 검증과 APK 재빌드는 별도로 구분한다.
 
 - 의미 있는 변경 후 최소한 `pnpm typecheck`와 `git diff --check`를 실행한다.
 - Expo 의존성이나 설정을 바꾸면 `pnpm exec expo install --check`와 `pnpm exec expo config --type public`도 실행한다.

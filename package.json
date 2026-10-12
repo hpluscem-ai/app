@@ -1,6 +1,6 @@
 {
   "name": "hpluseco-app",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/ui": "~57.0.17",
@@ -35,6 +35,7 @@
     "supercluster": "8.0.1"
   },
   "devDependencies": {
+    "@sentry/cli": "2.58.4",
     "@types/navermaps": "^3.9.2",
     "@types/react": "~19.2.2",
     "@types/react-dom": "~19.2.7",

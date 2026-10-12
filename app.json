@@ -3,12 +3,12 @@
     "name": "hpluseco-app",
     "slug": "hayan100",
     "scheme": "hpluseco",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "bundleIdentifier": "com.hayan100.app",
+      "bundleIdentifier": "kr.hayan100.app",
       "supportsTablet": true
     },
     "android": {

@@ -51,7 +51,7 @@ flowchart LR
   API --> OCR[OpenAI OCR]
 ```
 
-지도 화면은 iOS·Android에서 `@mj-studio/react-native-naver-map`, 웹에서 네이버 Maps JavaScript SDK를 사용한다. `EXPO_PUBLIC_NAVER_MAP_CLIENT_ID`는 Naver Cloud Maps에서 웹 URL과 iOS Bundle ID·Android package `com.hayan100.app`을 등록한 Client ID다. 위치·목록 데이터는 기사 인증 API로 받는다. 네이버 Client Secret·Supabase S3 키·문자·메일·OCR 비밀키를 클라이언트에 전달하지 않는다.
+지도 화면은 iOS·Android에서 `@mj-studio/react-native-naver-map`, 웹에서 네이버 Maps JavaScript SDK를 사용한다. `EXPO_PUBLIC_NAVER_MAP_CLIENT_ID`는 Naver Cloud Maps에서 웹 URL과 iOS Bundle ID `kr.hayan100.app`, Android package `com.hayan100.app`을 등록해야 하는 Client ID다. 2026-10-12 변경한 iOS ID의 Apple 등록·Naver Maps 허용 목록 추가는 아직 확인하지 않았다. 위치·목록 데이터는 기사 인증 API로 받는다. 네이버 Client Secret·Supabase S3 키·문자·메일·OCR 비밀키를 클라이언트에 전달하지 않는다.
 
 ### 기술 스택
 

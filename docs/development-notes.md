@@ -1328,3 +1328,39 @@
 - 실제 저장 검증: 같은 4097×3072 fixture를 수정된 iOS/AOS native 앱에서 격리 API로 등록했다. 원본 PNG의 투명 영역 alpha 0과 최종 JPEG의 흰 배경 RGB 255·검은 도형 RGB 0을 모두 확인했다. AOS 원본은 4096×3071, iOS는 4096×3072이며 긴 변 제한을 만족한다. 운영 서버 미배포 상태이고 기존 검정 JPEG를 재처리하지 않았다.
 - 문서 수정: LegalDocumentPage의 Head를 web에서만 렌더해 native Handoff 오류 경로를 제거했다. 기존 문서·링크·레이아웃을 유지하고 iOS/AOS의 문서 진입·복귀, iOS 가입 입력 보존을 확인했다. 기존 legacy redirect·native/web 링크 테스트를 보존했다.
 - 검증 경계: 사진 회귀 25/25·법률 문서/메타데이터 7/7·앱 타입 검사를 통과했다. 전체 앱 101/102는 QA 문서 중복 ID 1건 실패이며, 서버 격리 e2e 688/688을 통과했다. 네이티브 QA는 물리적 소스 복사본의 별도 Metro와 임시 PostgreSQL/loopback 저장소/provider stub을 사용했다. 실제 SMS·메일·유료 OCR·추가 운영 신청은 실행하지 않았다. 최종 플랫폼별 범위와 실패·보류·환경 복구 결과는 [전체 시뮬레이터 QA 결과](/Users/sangkun/.codex/visualizations/2026/10/06/01a1105e-e103-7010-aded-9c4acdfd5419/qa-2026-10-11/full-simulator/results.md)를 따른다.
+
+## 2026-10-12 — Android 뒤로가기·Fold 배치·카드 블러 수정
+
+- 승인과 역할: 사용자가 시스템 뒤로가기·1장 업로더 크기·누적 카드 스타일·인증번호 발송 줄바꿈을 지적하고, 한 장의 와이어프레임 검토 후 구현을 승인했다. AI가 수정과 자동 검사·Android 에뮬레이터 검증을 수행했다. 실물 Galaxy Fold의 수정 후 검증은 수행하지 않았다.
+- 이동: 로그인한 Android에서 Expo Router의 실제 이력이 있으면 pop, 없으면 `/mileage`, 이미 메인이면 유지하도록 `BackHandler`를 연결하고 수명 종료 시 제거한다. 탭 replace와 네이티브 Modal 닫기를 유지한다. 브라우저 history나 iOS 시스템 제스처를 별도로 가로채지 않는다.
+- 배치: 공용 AppScreen의 실제 스크롤 viewport에서 기존 도크 영역을 빼고 신청 라우트에 전달한다. MileagePhotoForm은 안내·버튼의 실제 높이와 기존 padding/gap을 제외한 높이를 1장 카드에만 적용한다. 웹의 단순 CSS 비율과 달리 네이티브 Safe Area·화면 크기·글자 확대에 따른 `onLayout` 측정을 사용한다. 2장 gap 8, 제출 앞 gap 40을 유지한다. 인증 버튼은 고정 107 대신 내용 너비와 한 줄 표시를 사용하고 입력은 나머지 너비를 받는다.
+- 카드: 기존 alpha 0.8은 이미 있었으며 Android에 웹 CSS backdropFilter가 적용되지 않은 차이를 수정했다. Expo SDK 57의 기존 expo-blur에서 배경을 BlurTargetView로 지정하고 카드를 sibling overlay로 분리해 자기 자신을 흐리지 않게 한다. 헤더·카드 높이를 측정해 기존 겹침 40과 내역 위치를 유지한다. Android 12 이상에서 블러가 동작하고 이전 OS는 무블러 대체 동작이다. CSS blur와 네이티브 radius의 픽셀 일치를 주장하지 않는다. 검증 중 중복 음수 margin으로 배지가 잘리는 오류를 발견해 제거하고 최종 화면을 다시 확인했다.
+- 실행 검증: Pixel 9 Pro Fold 에뮬레이터 기본 화면과 360×640dp에서 운영 API 로그인·조회, 이력 있는 문서 복귀, 이력 없는 탭→메인 복귀, 메인 유지, 1장/2장 카드와 인증 버튼을 확인했다. 360dp의 글자 2배에서도 인증 버튼 한 줄·업로더/제출 간격·누적 카드 내용 표시를 확인했다. iOS production JS export도 성공했다. 이번에 새 native APK나 iOS 앱을 빌드한 것은 아니다.
+- 자동 검사: 뒤로가기·인증·마일리지 테스트 37/37, `pnpm typecheck`, `git diff --check`를 통과했다. 새 회귀는 Android 이력/대체 경로, viewport/안내/버튼 크기 변경에 따른 1장 높이, 헤더/카드 높이 변경에 따른 카드와 내역 위치 및 blur target 분리를 확인한다. 독립 코드 리뷰에서 중복 margin 수정 뒤 남은 P1/P2 지적은 없었다.
+- 남은 범위: 글자 2배에서 기존 도크·연락처 입력 텍스트 잘림과 기존 헤더 적립신청 버튼 줄바꿈을 관찰해 결과에 남겼으며, 요청 범위 밖의 디자인 변경은 하지 않았다. 실물 Samsung Fold, iOS/웹 화면, Android 12 미만, 실제 사진 선택/제출·SMS/메일은 이번 검증에 포함하지 않는다. 새 의존성·브랜치·커밋·배포는 만들지 않았다. 시작한 Metro·에뮬레이터를 종료하고 크기·밀도·글자 설정을 복구했다.
+
+스크린샷과 이번 변경 파일의 리뷰 순서·책임은 [Android/Fold 검증 결과](/Users/sangkun/.codex/visualizations/2026/10/06/01a1105e-e103-7010-aded-9c4acdfd5419/android-fold-review-20261012/results.md)에 정리했다. 이전 릴리스 설정 5개 파일의 사용자 변경을 보존했다.
+
+## 2026-10-12 — 인증 버튼·소속 화살표·기본 요청 스피너
+
+- 사용자가 기본 RN 로더를 요청하고 수정 와이어프레임을 승인했다. 배경을 어둡게 하지 않는 기본 ActivityIndicator만 화면 중앙에 표시한다. RequestLoading은 기존 Paper Portal과 화면의 pending 상태를 사용하고 화면 이탈/요청 완료 시 제거한다. 로그아웃·탈퇴는 두 번째 Modal 없이 기존 NoticeModal 안에서 표시하며 접근성 modal 경계와 busy 닫기 차단을 유지한다. 웹 로딩 표현은 변경하지 않았다.
+- 로그인·회원가입·이메일/비밀번호 찾기·비밀번호 변경·프로필 저장·본인 재설정 링크 요청·사진 등록/재등록·SMS 발송에 연결했다. 자동 조회·자동 인증·시스템 사진 선택은 제외한다. 서버 계약·타이머·검증 조건은 변경하지 않았다.
+- 기존 공용 SMS 버튼의 자연 폭/한 줄 설정이 가입·찾기·내정보 네 화면에 적용됨을 확인했다. 적립신청의 64 고정 폭을 제거했다. Android 소속에 기존 24px ChevronDownIcon을 추가했으며 실제 화면에서 발견한 위치 오차를 부모 높이 기준 중앙 정렬로 보완했다.
+- Android 실행: 기존 debug 앱+최신 Metro 번들, Pixel 9 Pro Fold와 360×640dp에서 네 인증 화면의 SMS 버튼 한 줄을 확인했다. Fold의 소속 화살표·기본 메뉴 열기/선택 반영, 지연된 실제 로그인 요청의 기본 스피너와 투명 배경, 성공 후 메인 이동·스피너 제거, 잘못된 비밀번호 실패 후 입력/버튼 재활성화, 정상 로그아웃을 확인했다. 로그아웃 중 스피너는 요청이 빨라 실행 캡처하지 못했으며 공용 Modal 테스트로 검증했다.
+- 자동 검증: 관련 테스트 58/58, TypeScript, diff 공백 검사와 iOS production JS export 통과. 독립 리뷰의 접근성 경계 지적을 반영했고 남은 P1/P2는 없다. 실제 SMS/메일·회원탈퇴·프로필 저장·사진 등록은 실행하지 않았다. iOS 화면/실물 Samsung Fold/새 APK는 이번에 검증하지 않았다. 전체 버튼은 코드상 점검과 실제 화면 검증을 구분해 [결과·리뷰 순서](/Users/sangkun/.codex/visualizations/2026/10/06/01a1105e-e103-7010-aded-9c4acdfd5419/auth-buttons-loading-20261012/results.md)에 기록했다. 기존 큰 글자 도크·연락처 입력 잘림은 별도이며 임의로 배치를 바꾸지 않았다.
+
+- 후속 사용자 변경: 스피너 표시 중 전체 배경을 살짝 어둡게 해 달라는 요청에 따라 RequestLoading과 기존 NoticeModal에 공용 overlayScrim(`rgba(38, 44, 58, 0.28)`)을 사용했다. 테스트 기대값만 맞췄으며, 사용자 지시대로 이 마지막 설정 변경은 테스트·빌드·화면 검증을 실행하지 않았다. 위 통과 기록과 투명 배경 화면은 이 변경 전 결과다.
+
+## 2026-10-12 — Apple 등록용 iOS Bundle ID 변경
+
+- 사용자가 Apple의 `com.hayan100.app` 등록 불가 오류 뒤 Bundle ID 변경을 요청했다. AI가 iOS의 새 식별자로 `kr.hayan100.app`을 적용했다. Apple에서 새 식별자를 등록할 수 있는지는 아직 확인하지 않았으며 기존 ID의 소유 팀도 확정하지 않았다. 위 날짜의 `com.hayan100.app` iOS 빌드·실행 기록은 변경 전 결과다.
+- `app.json`의 iOS 값과 Git 제외 로컬 Xcode 프로젝트의 Debug/Release 식별자·Info.plist의 생성된 URL scheme을 맞췄다. Android package `com.hayan100.app`, 명시적 딥링크 scheme `hpluseco`, 버전·EAS 프로젝트·서버 API·사용자 데이터는 변경하지 않았다. iOS 식별자 변경은 새 네이티브 빌드에 반영해야 하며 기존 설치 앱의 업데이트로 취급하지 않는다.
+- 검증: `pnpm typecheck`, 공개 Expo config의 iOS/Android 식별자·scheme 확인, Xcode 두 구성의 식별자 및 plist 파싱/URL scheme 검사, `git diff --check`를 통과했다. `pnpm exec expo install --check`는 기존 의존성 15개의 권장 패치 불일치로 실패했으며 이번 변경에서 패키지를 업데이트하지 않았다. 새 iOS 바이너리 빌드·서명·실기기 실행·Apple/Naver 콘솔 등록은 실행하지 않았다.
+- 외부 후속 작업: Apple Developer에서 Explicit ID `kr.hayan100.app` 등록 후 App Store Connect에서 선택한다. Naver Cloud Maps의 기존 Application에도 iOS Bundle ID `kr.hayan100.app`을 추가해야 한다. Android 허용 항목은 유지한다. 현재 iOS/Android 등록 기준은 `.env.example`, `AGENTS.md`, `docs/handover.md`에 구분했다.
+- 리뷰 순서: `app.json`(EAS/Expo 원본 식별자) → Git 제외 `ios/hplusecoapp.xcodeproj/project.pbxproj`와 `ios/hplusecoapp/Info.plist`(기존 로컬 빌드와 URL scheme) → `.env.example`(지도 허용 ID 안내) → `AGENTS.md`·`docs/handover.md`·이 기록(현재 기준 및 미완료 외부 등록). 기존 작업 트리 변경과 과거 검증 증거는 보존했다.
+
+## 2026-10-12 — 1.0.2 릴리스 준비
+
+- 사용자 요청으로 `app.json`·`package.json` 버전을 1.0.2로 올리고 기존 Git 제외 iOS/Android 프로젝트의 표시 버전도 맞췄다. iOS Bundle ID는 `kr.hayan100.app`, Android package는 `com.hayan100.app`이다. 빌드 번호는 기존 EAS remote/production autoIncrement로 관리하며 임의의 원격 번호를 지정하지 않았다. 현재 앱 QA 수정과 릴리스 설정을 커밋 대상으로 확인했다.
+- 검증: 관련 회귀 테스트 58/58(어두운 배경 스피너 포함), 타입 검사, 공개 Expo config·로컬 네이티브 표시 버전 일치, diff 검사를 통과했다. 스피너 배경의 실제 기기 화면은 이번에도 실행하지 않았다. Expo 의존성 검사는 기존 15개 권장 패치 불일치가 남는다.
+- 실행 안내: `npx eas-cli build --platform ios --profile production --auto-submit`은 iOS production 빌드 후 EAS Submit으로 App Store Connect에 업로드한다. Apple 로그인·회사 팀 선택·서명/제출 자격 증명 설정과 Apple 처리 완료가 필요하다. 이 세션에서는 빌드·업로드·Git push를 실행하지 않았다. [Expo 공식 안내](https://docs.expo.dev/build/automate-submissions/)
