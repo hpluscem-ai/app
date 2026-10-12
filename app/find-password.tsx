@@ -4,6 +4,7 @@ import { Controller, FormProvider, useForm } from 'react-hook-form';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { AppScreen } from '../components/AppScreen';
+import { RequestLoading } from '../components/RequestLoading';
 import { FormTextField } from '../components/auth/FormTextField';
 import { PhoneVerificationSection } from '../components/auth/PhoneVerificationSection';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
@@ -105,6 +106,7 @@ export default function FindPasswordRoute() {
             onPress={() => router.replace('/login')}
           />
         </View>
+        <RequestLoading visible={isSubmitting} />
       </AppScreen>
     );
   }
@@ -159,6 +161,7 @@ export default function FindPasswordRoute() {
           onPress={submitForm}
         />
       </View>
+      <RequestLoading visible={isSubmitting} />
     </AppScreen>
   );
 }

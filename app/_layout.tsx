@@ -1,13 +1,13 @@
 import { useEffect } from 'react';
 import * as Sentry from '@sentry/react-native';
 import { useFonts } from 'expo-font';
-import { Stack, usePathname } from 'expo-router';
+import { Stack, usePathname, useRouter } from 'expo-router';
 import Head from 'expo-router/head';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as Updates from 'expo-updates';
 import { PaperProvider } from 'react-native-paper';
-import { Platform, StyleSheet, View } from 'react-native';
+import { BackHandler, Platform, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { AppBar } from '../components/AppBar';
@@ -39,6 +39,8 @@ void SplashScreen.preventAutoHideAsync();
 
 function RootNavigator() {
   const { state } = useAuth();
+  const pathname = usePathname();
+  const router = useRouter();
   const [fontsLoaded, fontError] = useFonts({
     'Inter-Bold': require('../assets/fonts/Inter-Bold.ttf'),
     'Inter-Medium': require('../assets/fonts/Inter-Medium.ttf'),
@@ -51,6 +53,27 @@ function RootNavigator() {
       void SplashScreen.hideAsync();
     }
   }, [fontError, fontsLoaded, state.status]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android' || state.status !== 'signedIn') return;
+
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        if (router.canGoBack()) {
+          router.back();
+          return true;
+        }
+
+        if (pathname !== '/mileage') {
+          router.replace('/mileage');
+        }
+        return true;
+      },
+    );
+
+    return () => subscription.remove();
+  }, [pathname, router, state.status]);
 
   if ((!fontsLoaded && !fontError) || state.status === 'restoring') {
     return null;

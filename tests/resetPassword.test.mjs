@@ -70,7 +70,7 @@ function mount(token = tokenA, status = 'signedOut') {
     '../utils/alerts': { useAlerts: () => alerts },
     '../utils/validation': { validatePassword: () => true, validatePasswordConfirmation: () => true },
   };
-  for (const name of ['AppScreen', 'NoticeModal', 'auth/FormTextField', 'auth/PrimaryButton']) {
+  for (const name of ['AppScreen', 'NoticeModal', 'RequestLoading', 'auth/FormTextField', 'auth/PrimaryButton']) {
     imports[`../components/${name}`] = { [name.split('/').at(-1)]: name.split('/').at(-1) };
   }
   const exports = {};

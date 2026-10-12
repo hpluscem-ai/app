@@ -5,6 +5,7 @@ import { Controller, useForm } from 'react-hook-form';
 
 import { AppScreen } from '../components/AppScreen';
 import { useAuth } from '../components/AuthProvider';
+import { RequestLoading } from '../components/RequestLoading';
 import { FormTextField } from '../components/auth/FormTextField';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
 import { colors, typography } from '../constants/theme';
@@ -169,6 +170,7 @@ export default function LoginRoute() {
           </View>
         </View>
       </View>
+      <RequestLoading visible={isSubmitting} />
     </AppScreen>
   );
 }

@@ -4,6 +4,7 @@ import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Controller, FormProvider, useForm } from 'react-hook-form';
 
 import { AppScreen } from '../components/AppScreen';
+import { RequestLoading } from '../components/RequestLoading';
 import { CompanySelect } from '../components/auth/CompanySelect';
 import { FormTextField } from '../components/auth/FormTextField';
 import { LegalDocumentLink } from '../components/auth/LegalDocumentLink';
@@ -479,6 +480,7 @@ export default function SignUpRoute() {
             />
           </View>
         </View>
+        <RequestLoading visible={isSubmitting} />
       </AppScreen>
     </FormProvider>
   );

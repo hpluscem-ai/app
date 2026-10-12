@@ -44,6 +44,7 @@ type AppScreenProps =
       extendUnderBottomInset?: boolean;
       scrollEnabled?: boolean;
       onEndReached?: () => void;
+      onViewportHeightChange?: (height: number) => void;
       variant: 'main';
     })
   | (AppScreenBaseProps & {
@@ -184,11 +185,13 @@ function ScreenScrollView({
   insetForDock,
   scrollEnabled,
   onEndReached,
+  onViewportHeightChange,
 }: {
   children: ReactNode;
   insetForDock: boolean;
   scrollEnabled: boolean;
   onEndReached?: () => void;
+  onViewportHeightChange?: (height: number) => void;
 }) {
   const scroll = useRef({ offset: 0, viewport: 0, content: 0 });
   const checkEnd = () => {
@@ -205,7 +208,11 @@ function ScreenScrollView({
       keyboardShouldPersistTaps="handled"
       scrollEnabled={scrollEnabled}
       showsVerticalScrollIndicator={false}
-      onLayout={onEndReached ? event => { scroll.current.viewport = event.nativeEvent.layout.height; checkEnd(); } : undefined}
+      onLayout={onEndReached || onViewportHeightChange ? event => {
+        scroll.current.viewport = event.nativeEvent.layout.height;
+        onViewportHeightChange?.(Math.max(0, scroll.current.viewport - (insetForDock ? styles.scrollContentWithFixedDock.paddingBottom : 0)));
+        checkEnd();
+      } : undefined}
       onContentSizeChange={onEndReached ? (_width, height) => { scroll.current.content = height; checkEnd(); } : undefined}
       onScroll={onEndReached ? event => { scroll.current.offset = event.nativeEvent.contentOffset.y; checkEnd(); } : undefined}
       scrollEventThrottle={onEndReached ? 100 : undefined}
@@ -268,6 +275,7 @@ export function AppScreen(props: AppScreenProps) {
                 insetForDock={insetForDock}
                 scrollEnabled={scrollEnabled}
                 onEndReached={props.onEndReached}
+                onViewportHeightChange={props.onViewportHeightChange}
               >
                 {scrollContents}
               </ScreenScrollView>

@@ -45,6 +45,7 @@ function render(required) {
     '../../utils/validation': validation,
     './FormTextField': { FormTextField: 'FormTextField' },
     './PrimaryButton': { PrimaryButton: 'PrimaryButton' },
+    '../RequestLoading': { RequestLoading: 'RequestLoading' },
   });
   const tree = PhoneVerificationSection({
     required,
@@ -152,6 +153,7 @@ function mountVerification(purpose = 'sign_up') {
     '../../constants/theme': { colors: {}, typography: {} },
     '../../utils/inputFormat': inputFormat, '../../utils/validation': validation,
     './FormTextField': { FormTextField: 'FormTextField' }, './PrimaryButton': { PrimaryButton: 'PrimaryButton' },
+    '../RequestLoading': { RequestLoading: 'RequestLoading' },
   });
   let tree, verification;
   const page = {

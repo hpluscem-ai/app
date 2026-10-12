@@ -21,6 +21,7 @@ export type MileagePhotoSelection = {
 };
 
 type MileagePhotoFormProps = {
+  availableHeight?: number;
   fillAvailableSpace?: boolean;
   intro: string;
   onValidSubmit: (selection: MileagePhotoSelection) => void | Promise<void>;
@@ -36,6 +37,7 @@ type MileagePhotoFormProps = {
 };
 
 export function MileagePhotoForm({
+  availableHeight = 0,
   fillAvailableSpace = false,
   intro,
   onValidSubmit,
@@ -68,6 +70,8 @@ export function MileagePhotoForm({
   const [dashboardImage, setDashboardImage] =
     useState<ImagePicker.ImagePickerAsset | null>(null);
   const [showErrors, setShowErrors] = useState(false);
+  const [introHeight, setIntroHeight] = useState(0);
+  const [submitHeight, setSubmitHeight] = useState(0);
   const [hidden, setHidden] = useState({ receipt: false, dashboard: false, combined: false });
   const pickerRevision = useRef(0);
   const focused = useRef(false);
@@ -173,6 +177,10 @@ export function MileagePhotoForm({
     setPhotoMode(next);
   };
   const atLeastOneImageMissing = !receiptImage && !dashboardImage;
+  const singleCardMaxHeight = fillAvailableSpace && availableHeight > 0 && introHeight > 0 && submitHeight > 0
+    ? Math.max(0, availableHeight - styles.pageContentFilled.paddingTop - styles.pageContentFilled.paddingBottom
+      - introHeight - styles.uploadSection.gap - styles.pageContent.gap - submitHeight)
+    : undefined;
 
   return (
     <View
@@ -182,7 +190,7 @@ export function MileagePhotoForm({
       ]}
     >
       <View style={styles.uploadSection}>
-        <View style={styles.introRow}>
+        <View style={styles.introRow} onLayout={event => setIntroHeight(event.nativeEvent.layout.height)}>
           <Text style={styles.intro}>{intro}</Text>
           <View style={styles.modeToggle} accessibilityRole="radiogroup" accessibilityLabel="등록 사진 장수">
             {(['single', 'separate'] as const).map(mode => (
@@ -208,6 +216,7 @@ export function MileagePhotoForm({
         <View style={styles.uploadRow}>
           {photoMode === 'single' ? (
             <UploadCard kind="combined" error={showErrors && !combinedImage}
+              maxHeight={singleCardMaxHeight}
               image={combinedImage ?? (existingPhotoMode === 'single' && !hidden.combined ? existingImages?.receipt ?? null : null)}
               onChoose={() => chooseImage('combined')}
               onRemove={() => { if (lockedRef.current) return; onSelectionChange?.(); setCombinedImage(null); setHidden(value => ({ ...value, combined: true })); }}
@@ -245,7 +254,7 @@ export function MileagePhotoForm({
         </View>
       </View>
 
-      <View style={fillAvailableSpace ? styles.submitSection : undefined}>
+      <View style={fillAvailableSpace ? styles.submitSection : undefined} onLayout={event => setSubmitHeight(event.nativeEvent.layout.height)}>
         <PrimaryButton label={submitLabel} onPress={submitImages} disabled={locked} />
       </View>
     </View>
@@ -261,7 +270,6 @@ const styles = StyleSheet.create({
   pageContentFilled: {
     flexGrow: 1,
     justifyContent: 'space-between',
-    gap: 0,
     paddingTop: 32,
     paddingBottom: 8,
   },

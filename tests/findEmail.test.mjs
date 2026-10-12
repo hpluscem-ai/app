@@ -6,6 +6,8 @@ import ts from 'typescript';
 const source = ts.transpileModule(readFileSync(new URL('../app/find-email.tsx', import.meta.url), 'utf8'), {
   compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX },
 }).outputText;
+const nodes = (tree) => !tree || typeof tree !== 'object' ? [] :
+  [tree, ...[tree.props?.children].flat(Infinity).flatMap(nodes)];
 
 test('no account clears the phone and consumed verification after the notice is confirmed', async () => {
   const values = { phone: '010-1234-5678', verificationCode: '123456', verificationProof: 'proof' };
@@ -30,6 +32,7 @@ test('no account clears the phone and consumed verification after the notice is 
     'react-native': { Pressable: 'Pressable', Text: 'Text', View: 'View', StyleSheet: { create: (value) => value } },
     'react-hook-form': { useForm: () => form, FormProvider: 'FormProvider' },
     '../components/AppScreen': { AppScreen: 'AppScreen' },
+    '../components/RequestLoading': { RequestLoading: 'RequestLoading' },
     '../components/auth/PhoneVerificationSection': { PhoneVerificationSection: 'PhoneVerificationSection' },
     '../components/auth/PrimaryButton': { PrimaryButton: 'PrimaryButton' },
     '../constants/theme': { colors: {}, typography: {} },
@@ -52,7 +55,7 @@ test('no account clears the phone and consumed verification after the notice is 
     assert.ok(name in imports, `Unexpected import ${name}`);
     return imports[name];
   }, exports);
-  const button = exports.default().props.children.props.children[1];
+  const button = nodes(exports.default()).find((node) => node.props?.label === '이메일 찾기');
   assert.equal(button.props.disabled, false);
   await button.props.onPress();
   assert.equal(verificationResets, 1);
@@ -62,6 +65,6 @@ test('no account clears the phone and consumed verification after the notice is 
   notices[0].onConfirm();
   assert.equal(resets, 1);
   assert.deepEqual(values, { phone: '', verificationCode: '', verificationProof: '' });
-  const after = exports.default().props.children.props.children[1];
+  const after = nodes(exports.default()).find((node) => node.props?.label === '이메일 찾기');
   assert.equal(after.props.disabled, true);
 });

@@ -7,6 +7,7 @@ import { AppBar } from '../../components/AppBar';
 import { AppScreen } from '../../components/AppScreen';
 import { useAuth } from '../../components/AuthProvider';
 import { NoticeModal } from '../../components/NoticeModal';
+import { RequestLoading } from '../../components/RequestLoading';
 import { MileagePhotoForm, UploadCard, type MileagePhotoSelection } from '../../components/mileage';
 import { colors, typography } from '../../constants/theme';
 import { AuthApiError, getAuthErrorMessage } from '../../utils/authApi';
@@ -195,6 +196,7 @@ export default function MileageStatusRoute() {
             router.replace('/mileage');
           } else if (visibleNotice.action === 'reload') setRetry(value => value + 1);
         }} />
+      <RequestLoading visible={busy} />
     </>
   );
 }

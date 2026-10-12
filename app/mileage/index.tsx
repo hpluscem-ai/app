@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import DateTimePicker from '@expo/ui/community/datetime-picker';
+import { BlurTargetView, BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
@@ -98,8 +99,11 @@ export default function MileageRoute() {
   type Notice = { message: string; retry?: () => void };
   const [notice, setNotice] = useState<Notice | null>(null);
   const [summary, setSummary] = useState<{ userId: string; balance?: number; notice?: Notice } | null>(null);
+  const [balanceCardHeight, setBalanceCardHeight] = useState(146);
+  const [heroHeight, setHeroHeight] = useState(196);
   type Listing = { controller: AbortController; query: MileageQuery; cursor: string | null; busy: boolean; failed: boolean };
   const listing = useRef<Listing | null>(null);
+  const balanceBlurTarget = useRef<View>(null);
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -169,15 +173,34 @@ export default function MileageRoute() {
         const scope = listing.current;
         if (scope && !scope.failed) void loadPage(scope, true);
       }}>
-        <MileageHero userName={state.user?.name} onApply={() => router.push('/mileage/apply')} />
-        <View style={styles.content}>
-          <MileageBalanceCard balance={currentSummary?.balance} />
-          <MileageHistory items={items} appliedFilter={filter}
-            onQueryChange={next => {
-              try { mileageQuery(next); setFilter(next); return true; }
-              catch (error) { setNotice({ message: getAuthErrorMessage(error) }); return false; }
+        <View style={styles.mileageLayer}>
+          <BlurTargetView ref={balanceBlurTarget} style={styles.balanceBlurTarget}>
+            <View onLayout={event => {
+              const height = event.nativeEvent.layout.height;
+              setHeroHeight(current => current === height ? current : height);
+            }}>
+              <MileageHero userName={state.user?.name} onApply={() => router.push('/mileage/apply')} />
+            </View>
+            <View style={styles.content}>
+              <View style={[styles.balanceBackdrop, { height: Math.max(balanceCardHeight - 40, 0) }]} />
+              <MileageHistory items={items} appliedFilter={filter}
+                onQueryChange={next => {
+                  try { mileageQuery(next); setFilter(next); return true; }
+                  catch (error) { setNotice({ message: getAuthErrorMessage(error) }); return false; }
+                }}
+                onOpenStatus={(status, id) => router.push({ pathname: '/mileage/[status]', params: { status, id } })} />
+            </View>
+          </BlurTargetView>
+          <View
+            pointerEvents="box-none"
+            onLayout={event => {
+              const height = event.nativeEvent.layout.height;
+              setBalanceCardHeight(current => current === height ? current : height);
             }}
-            onOpenStatus={(status, id) => router.push({ pathname: '/mileage/[status]', params: { status, id } })} />
+            style={[styles.balanceCardOverlay, { top: heroHeight - 40 }]}
+          >
+            <MileageBalanceCard balance={currentSummary?.balance} blurTarget={balanceBlurTarget} />
+          </View>
         </View>
       </AppScreen>
       <NoticeModal accessibilityLabel="마일리지 조회 안내" confirmLabel={visibleNotice?.retry ? '다시 시도' : '확인'}
@@ -233,21 +256,22 @@ function MileageHero({
           pressed && styles.pressed,
         ]}
       >
-        <Text style={styles.applyButtonText}>적립신청</Text>
+        <Text numberOfLines={1} style={styles.applyButtonText}>적립신청</Text>
       </Pressable>
     </LinearGradient>
   );
 }
 
-function MileageBalanceCard({ balance }: { balance?: number }) {
+function MileageBalanceCard({
+  balance,
+  blurTarget,
+}: {
+  balance?: number;
+  blurTarget: RefObject<View | null>;
+}) {
   const balanceLabel = balance === undefined ? '-' : balance.toLocaleString('ko-KR');
-
-  return (
-    <View
-      accessibilityLabel={balance === undefined ? '누적 마일리지 미조회' : `누적 마일리지 ${balanceLabel}마일`}
-      accessible
-      style={styles.balanceCard}
-    >
+  const content = (
+    <>
       <View style={styles.balanceContent}>
         <View style={styles.settlementBadge}>
           <Text style={styles.settlementText}>
@@ -265,6 +289,37 @@ function MileageBalanceCard({ balance }: { balance?: number }) {
       <MileageWaterJugIcon
         accessibilityLabel="마일리지 물통 일러스트"
       />
+    </>
+  );
+
+  const accessibility = {
+    accessibilityLabel: balance === undefined ? '누적 마일리지 미조회' : `누적 마일리지 ${balanceLabel}마일`,
+    accessible: true,
+  };
+
+  if (Platform.OS === 'android') {
+    return (
+      <View {...accessibility} style={styles.balanceCardFrame}>
+        <BlurView
+          accessible={false}
+          blurMethod="dimezisBlurViewSdk31Plus"
+          blurReductionFactor={4}
+          blurTarget={blurTarget}
+          intensity={20}
+          style={styles.balanceCardBlur}
+        >
+          <View style={styles.balanceCardSurface}>{content}</View>
+        </BlurView>
+      </View>
+    );
+  }
+
+  return (
+    <View
+      {...accessibility}
+      style={[styles.balanceCardFrame, styles.balanceCardSurface]}
+    >
+      {content}
     </View>
   );
 }
@@ -750,7 +805,6 @@ const styles = StyleSheet.create({
     color: colors.gray50,
   },
   applyButton: {
-    width: 64,
     minHeight: 28,
     flexShrink: 0,
     alignItems: 'center',
@@ -768,7 +822,38 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingHorizontal: 20,
   },
-  balanceCard: {
+  mileageLayer: {
+    width: '100%',
+    position: 'relative',
+  },
+  balanceBlurTarget: {
+    width: '100%',
+  },
+  balanceBackdrop: {
+    backgroundColor: colors.white,
+  },
+  balanceCardOverlay: {
+    position: 'absolute',
+    right: 20,
+    left: 20,
+  },
+  balanceCardFrame: {
+    width: '100%',
+    minHeight: 146,
+    borderRadius: 32,
+    shadowColor: colors.black,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.04,
+    shadowRadius: 20,
+    elevation: 2,
+  },
+  balanceCardBlur: {
+    width: '100%',
+    minHeight: 146,
+    overflow: 'hidden',
+    borderRadius: 32,
+  },
+  balanceCardSurface: {
     ...(Platform.OS === 'web' ? { backdropFilter: 'blur(5px)' } : {}),
     width: '100%',
     minHeight: 146,
@@ -776,17 +861,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'center',
     gap: 16,
-    marginTop: -40,
     borderWidth: 1,
     borderColor: colors.gray100,
     borderRadius: 32,
     backgroundColor: 'rgba(255, 255, 255, 0.8)',
     padding: 20,
-    shadowColor: colors.black,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.04,
-    shadowRadius: 20,
-    elevation: 2,
   },
   balanceContent: {
     flex: 1,

@@ -6,6 +6,7 @@ import { StyleSheet, View } from 'react-native';
 import { AppScreen } from '../components/AppScreen';
 import { useAuth } from '../components/AuthProvider';
 import { NoticeModal } from '../components/NoticeModal';
+import { RequestLoading } from '../components/RequestLoading';
 import { FormTextField } from '../components/auth/FormTextField';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
 import {
@@ -239,6 +240,7 @@ export default function ResetPasswordRoute() {
         visible={isComplete}
       />
       {errorModal}
+      <RequestLoading visible={isSubmitting} />
     </>
   );
 }

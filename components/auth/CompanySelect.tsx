@@ -1,8 +1,9 @@
 import { MenuView } from '@expo/ui/community/menu';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { colors, typography } from '../../constants/theme';
+import { ChevronDownIcon } from '../icons/ChevronDownIcon';
 
 export type CompanySelectProps = {
   companies: readonly { id: string; businessName: string }[];
@@ -28,8 +29,15 @@ export function CompanySelect({
   const [width, setWidth] = useState(0);
   const selected = companies.find((company) => company.id === value);
   const label = selected?.businessName ?? '소속을 선택해주세요.';
-  const text = (
-    <Text style={[styles.text, selected && styles.selectedText]}>{label}</Text>
+  const content = (
+    <>
+      <Text style={[styles.text, selected && styles.selectedText]}>{label}</Text>
+      {Platform.OS === 'android' ? (
+        <View pointerEvents="none" style={styles.chevron}>
+          <ChevronDownIcon />
+        </View>
+      ) : null}
+    </>
   );
 
   return (
@@ -47,9 +55,9 @@ export function CompanySelect({
           disabled={disabled}
           onBlur={onBlur}
           onPress={onRetry}
-          style={styles.select}
+          style={[styles.select, Platform.OS === 'android' && styles.selectAndroid]}
         >
-          {text}
+          {content}
         </Pressable>
       ) : (
         <MenuView
@@ -74,9 +82,13 @@ export function CompanySelect({
             accessibilityRole="button"
             accessibilityValue={{ text: label }}
             // MenuView measures its RN trigger intrinsically inside the native host.
-            style={[styles.select, { width }]}
+            style={[
+              styles.select,
+              Platform.OS === 'android' && styles.selectAndroid,
+              { width },
+            ]}
           >
-            {text}
+            {content}
           </View>
         </MenuView>
       )}
@@ -95,6 +107,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 16,
   },
+  selectAndroid: {
+    paddingRight: 40,
+  },
   text: { ...typography.authBody, color: colors.gray400 },
   selectedText: { color: colors.gray800 },
+  chevron: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    right: 16,
+    width: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

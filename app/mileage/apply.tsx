@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { AppScreen } from '../../components/AppScreen';
 import { useAuth } from '../../components/AuthProvider';
 import { NoticeModal } from '../../components/NoticeModal';
+import { RequestLoading } from '../../components/RequestLoading';
 import { MileagePhotoForm, type MileagePhotoSelection } from '../../components/mileage';
 import { imageSources } from '../../constants/assets';
 import { getAuthErrorMessage } from '../../utils/authApi';
@@ -22,6 +23,7 @@ export default function MileageApplyRoute() {
   const submitted = useRef(false);
   const prepared = useRef<Awaited<ReturnType<typeof prepareMileageSubmission>> | null>(null);
   const [busy, setBusy] = useState(false);
+  const [viewportHeight, setViewportHeight] = useState(0);
   const [guideVisible, setGuideVisible] = useState(false);
   const [notice, setNotice] = useState<{ success: boolean; message: string } | null>(null);
   const resetSubmission = () => { prepared.current?.dispose(); prepared.current = null; };
@@ -70,8 +72,9 @@ export default function MileageApplyRoute() {
 
   return (
     <>
-      <AppScreen activeTab="apply" showFooter={false} variant="main">
+      <AppScreen activeTab="apply" showFooter={false} variant="main" onViewportHeightChange={setViewportHeight}>
         <MileagePhotoForm
+          availableHeight={viewportHeight}
           fillAvailableSpace intro="적립 이미지 업로드" onValidSubmit={submit}
           onSelectionChange={resetSubmission} locked={busy || submitted.current || guideVisible}
           onOpenGuide={() => {
@@ -98,6 +101,7 @@ export default function MileageApplyRoute() {
             router.replace('/mileage');
           }
         }} />
+      <RequestLoading visible={busy} />
     </>
   );
 }

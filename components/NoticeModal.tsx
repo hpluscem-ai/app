@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
+import { ActivityIndicator, Image, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 
 import { colors, typography } from '../constants/theme';
 
@@ -35,6 +35,7 @@ export function NoticeModal(props: NoticeModalProps) {
     onRequestClose = onCancel ?? onConfirm,
   } = visible ? props : displayedProps;
   const disabled = busy || !visible;
+  const showLoading = busy && Platform.OS !== 'web';
 
   return (
     <Modal
@@ -45,8 +46,10 @@ export function NoticeModal(props: NoticeModalProps) {
       transparent
       visible={visible}
     >
-      <View style={[styles.overlay, image && styles.illustratedOverlay]}>
-        <View
+      <View accessibilityViewIsModal={showLoading} style={[styles.overlay, image && styles.illustratedOverlay]}>
+        {showLoading ? (
+          <ActivityIndicator accessibilityLabel="처리 중" accessibilityRole="progressbar" accessibilityState={{ busy: true }} />
+        ) : <View
           accessibilityLabel={accessibilityLabel}
           accessibilityRole="alert"
           accessibilityViewIsModal
@@ -94,7 +97,7 @@ export function NoticeModal(props: NoticeModalProps) {
               </Pressable>
             ) : null}
           </View>
-        </View>
+        </View>}
       </View>
     </Modal>
   );

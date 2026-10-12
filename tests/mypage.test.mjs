@@ -86,7 +86,7 @@ async function mount() {
       showPhoneVerificationRequiredAlert: () => state.errors.push('proof-required'),
     }) },
   };
-  for (const name of ['AppScreen', 'NoticeModal', 'auth/FormTextField', 'auth/LegalDocumentLink',
+  for (const name of ['AppScreen', 'NoticeModal', 'RequestLoading', 'auth/FormTextField', 'auth/LegalDocumentLink',
     'auth/PhoneVerificationSection', 'auth/PrimaryButton', 'icons/CheckSquareIcon']) {
     imports[`../components/${name}`] = { [name.split('/').at(-1)]: name.split('/').at(-1) };
   }
@@ -110,6 +110,7 @@ async function mount() {
     blur() { focused = false; cleanup?.(); cleanup = undefined; previousFocus = undefined; },
     async focus() { focused = true; page.render(); await tick(); page.render(); },
     button() { return nodes(page.render()).find((node) => node.props?.label === '정보 변경하기').props; },
+    loading() { return nodes(page.render()).find((node) => node.type === 'RequestLoading').props.visible; },
     notice() { return nodes(page.render()).find((node) => node.props && 'notice' in node.props).props.notice; },
     resetLink() {
       nodes(page.render()).find((node) => node.type === 'Pressable' &&
@@ -142,6 +143,20 @@ test('a late save after leaving cannot overwrite the current name or start phone
   assert.equal(phoneCalls, 0);
   assert.equal(page.notice(), null);
   assert.equal(page.state.proofResets, 0);
+});
+
+test('profile save keeps the request loader visible until the request completes', async () => {
+  const page = await mount(), response = deferred();
+  page.api.updateProfile = () => response.promise;
+  page.form.values.name = 'Updated';
+
+  const pending = page.button().onPress();
+  await tick();
+  assert.equal(page.loading(), true);
+
+  response.resolve({ ...profile, name: 'Updated' });
+  await pending;
+  assert.equal(page.loading(), false);
 });
 
 test('leaving during asynchronous validation prevents the save request', async () => {

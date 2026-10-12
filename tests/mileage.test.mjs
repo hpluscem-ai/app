@@ -13,7 +13,7 @@ function load(path, imports, testExports = '') {
   return exports;
 }
 const api = load('../utils/mileageApi.ts', { './authApi': authApi });
-const native = { Keyboard: { dismiss() {} }, StyleSheet: { create: x => x, absoluteFill: { position: 'absolute' } }, Platform: { OS: 'web' }, View: 'View', Text: 'Text', Image: 'Image', Modal: 'Modal', Pressable: 'Pressable' };
+const native = { useWindowDimensions: () => ({ fontScale: 1 }), Keyboard: { dismiss() {} }, StyleSheet: { create: x => x, absoluteFill: { position: 'absolute' } }, Platform: { OS: 'web' }, View: 'View', Text: 'Text', Image: 'Image', Modal: 'Modal', Pressable: 'Pressable' };
 function mount(path, extras = {}, params = {}, renderHistory = false) {
   let index = 0, dirty = true, focused = true, mounted = true, tree;
   const slots = [], effects = [], navigation = [], calls = [], details = [], photos = [], preparations = [], summaries = [];
@@ -33,6 +33,7 @@ function mount(path, extras = {}, params = {}, renderHistory = false) {
     'expo-router': { useFocusEffect: fn => react.useEffect(() => focused ? fn() : undefined, [fn, focused]), useRouter: () => ({ push: url => navigation.push(url), replace: url => navigation.push(url) }), useLocalSearchParams: () => params, Stack: { Screen: 'Stack.Screen' }, Redirect: 'Redirect' },
     'react-native': native,
     'expo-linear-gradient': { LinearGradient: 'Gradient' },
+    'expo-blur': { BlurTargetView: 'BlurTargetView', BlurView: 'BlurView' },
     '@expo/ui/community/datetime-picker': { __esModule: true, default: 'DateTimePicker' },
     '@expo/ui/swift-ui': { Host: 'Host', RNHostView: 'RNHostView', DatePicker: 'DatePicker', Popover: Object.assign(function Popover() {}, { Trigger: 'Popover.Trigger', Content: 'Popover.Content' }) },
     '@expo/ui/swift-ui/modifiers': { datePickerStyle: style => ({ style }), environment: (key, value) => ({ key, value }), scaleEffect: scale => ({ scale }) },
@@ -42,6 +43,7 @@ function mount(path, extras = {}, params = {}, renderHistory = false) {
     '../../components/AppBar': { AppBar: 'AppBar' },
     '../../components/AuthProvider': { useAuth: () => auth },
     '../../components/NoticeModal': { NoticeModal: 'NoticeModal' },
+    '../../components/RequestLoading': { RequestLoading: 'RequestLoading' },
     '../../components/mileage': { MileagePhotoForm: 'MileagePhotoForm', UploadCard: 'UploadCard' },
     '../../constants/assets': { imageSources: { mileagePhotoGuide: 'guide.png' } },
     '../../utils/mileagePhotoGuide': { hasConfirmedMileagePhotoGuide: () => true, confirmMileagePhotoGuide() {} },
@@ -180,6 +182,51 @@ test('balance shows real zero, refreshes on focus and stays independent of histo
   page.summaries[1].resolve({ accumulatedMileage: 74910 }); await page.flush();
   assert.equal(page.get('MileageBalanceCard').balance, 74910);
   assert.equal(card().props.accessibilityLabel, '누적 마일리지 74,910마일');
+  page.unmount();
+});
+
+test('Android balance card tracks hero and card measurements with a sibling blur target', () => {
+  const page = mount('../app/mileage/index.tsx', {
+    'react-native': { ...native, Platform: { OS: 'android' } },
+  });
+  const current = () => {
+    const rendered = page.render();
+    const all = nodes(rendered);
+    return {
+      all,
+      overlay: all.find(node =>
+        Array.isArray(node.props?.style) && node.props.style[1]?.top !== undefined,
+      ),
+      backdrop: all.find(node =>
+        Array.isArray(node.props?.style) && node.props.style[1]?.height !== undefined,
+      ),
+      heroLayout: all.find(node =>
+        node.type === 'View' && typeof node.props?.onLayout === 'function' &&
+        !Array.isArray(node.props.style),
+      ),
+    };
+  };
+
+  assert.equal(current().overlay.props.style[1].top, 156);
+  assert.equal(current().backdrop.props.style[1].height, 106);
+
+  current().heroLayout.props.onLayout({ nativeEvent: { layout: { height: 240 } } });
+  assert.equal(current().overlay.props.style[1].top, 200);
+
+  current().overlay.props.onLayout({ nativeEvent: { layout: { height: 180 } } });
+  assert.equal(current().backdrop.props.style[1].height, 140);
+
+  const { all, overlay } = current();
+  const blurTarget = all.find(node => node.type === 'BlurTargetView');
+  const card = all.find(node => node.type?.name === 'MileageBalanceCard');
+  const cardBlur = nodes(card.type(card.props)).find(node => node.type === 'BlurView');
+  const layer = all.find(node => {
+    const children = [node.props?.children].flat(Infinity);
+    return children.includes(blurTarget) && children.includes(overlay);
+  });
+  assert.ok(layer, 'the target and card overlay must be siblings');
+  assert.equal(card.props.blurTarget, blurTarget.props.ref);
+  assert.equal(cardBlur.props.blurTarget, blurTarget.props.ref);
   page.unmount();
 });
 
@@ -611,6 +658,33 @@ test('invalid dates close the filter before the existing error notice and keep a
   page.unmount();
 });
 
+
+test('single photo fits the remaining viewport after controls, including resize and larger text', () => {
+  const formProps = { availableHeight: 0, fillAvailableSpace: true, intro: '적립 이미지 업로드', requirement: 'both', submitLabel: '사진등록', onValidSubmit() {} };
+  const page = mount('../components/mileage/MileagePhotoForm.tsx', {
+    formProps,
+    'expo-image-picker': {},
+    '../../utils/alerts': { useAlerts: () => ({}) },
+    '../../utils/mileagePhotos': {},
+    '../auth/PrimaryButton': { PrimaryButton: 'PrimaryButton' },
+    './UploadCard': { UploadCard: 'UploadCard' },
+  });
+  assert.equal(page.get('UploadCard').maxHeight, undefined);
+  for (const [viewport, intro, button] of [[640, 34, 52], [420, 68, 72], [720, 34, 52]]) {
+    formProps.availableHeight = viewport;
+    const [section, submit] = page.render().props.children;
+    section.props.children[0].props.onLayout({ nativeEvent: { layout: { height: intro } } });
+    submit.props.onLayout({ nativeEvent: { layout: { height: button } } });
+    const cardHeight = page.get('UploadCard').maxHeight;
+    assert.ok(cardHeight > 0);
+    assert.equal(32 + intro + 20 + cardHeight + 40 + button + 8, viewport);
+  }
+  nodes(page.render()).find(node => node.props?.accessibilityLabel === '2장').props.onPress();
+  const cards = nodes(page.render()).filter(node => node.type === 'UploadCard');
+  assert.equal(cards.length, 2);
+  assert.ok(cards.every(card => card.props.maxHeight === undefined));
+  page.unmount();
+});
 
 test('photo mode defaults to one, preserves both selections and ignores late picker results after switching', async () => {
   const submits = [], notices = [], picks = [];

@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { FormProvider, useForm } from 'react-hook-form';
 
 import { AppScreen } from '../components/AppScreen';
+import { RequestLoading } from '../components/RequestLoading';
 import { PhoneVerificationSection } from '../components/auth/PhoneVerificationSection';
 import { PrimaryButton } from '../components/auth/PrimaryButton';
 import { colors, typography } from '../constants/theme';
@@ -113,6 +114,7 @@ export default function FindEmailRoute() {
             />
           </View>
         </View>
+        <RequestLoading visible={isSubmitting} />
       </AppScreen>
     );
   }
@@ -140,6 +142,7 @@ export default function FindEmailRoute() {
           onPress={submitForm}
         />
       </View>
+      <RequestLoading visible={isSubmitting} />
     </AppScreen>
   );
 }

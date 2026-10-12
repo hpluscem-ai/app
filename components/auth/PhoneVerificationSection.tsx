@@ -13,6 +13,7 @@ import {
 } from '../../utils/validation';
 import { FormTextField } from './FormTextField';
 import { PrimaryButton } from './PrimaryButton';
+import { RequestLoading } from '../RequestLoading';
 
 type PhoneVerificationFormValues = {
   phone: string;
@@ -320,8 +321,9 @@ export function PhoneVerificationSection({
         <PrimaryButton
           disabled={disabled || isRequesting || isVerifying}
           label={hasRequestedCode ? '재발송' : '인증번호 발송'}
+          labelNumberOfLines={1}
           onPress={() => void requestCode()}
-          width={107}
+          width="auto"
         />
       </View>
 
@@ -378,6 +380,7 @@ export function PhoneVerificationSection({
           :{String(remainingSeconds % 60).padStart(2, '0')}
         </Text>
       ) : null}
+      <RequestLoading visible={isRequesting} />
     </View>
   );
 }

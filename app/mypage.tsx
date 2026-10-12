@@ -6,6 +6,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppScreen } from '../components/AppScreen';
 import { useAuth } from '../components/AuthProvider';
 import { NoticeModal } from '../components/NoticeModal';
+import { RequestLoading } from '../components/RequestLoading';
 import { FormTextField } from '../components/auth/FormTextField';
 import { LegalDocumentLink } from '../components/auth/LegalDocumentLink';
 import { PhoneVerificationSection } from '../components/auth/PhoneVerificationSection';
@@ -380,6 +381,7 @@ export default function MyPageRoute() {
         onConfirm={() => void confirmAccountAction()}
         visible={accountAction !== null}
       />
+      <RequestLoading visible={isSavingProfile || isSendingResetLink} />
     </FormProvider>
   );
 }

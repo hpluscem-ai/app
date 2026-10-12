@@ -8,6 +8,7 @@ type PrimaryButtonProps = {
   onPress: NonNullable<PressableProps['onPress']>;
   disabled?: boolean;
   width?: DimensionValue;
+  labelNumberOfLines?: number;
 };
 
 export function PrimaryButton({
@@ -15,6 +16,7 @@ export function PrimaryButton({
   onPress,
   disabled = false,
   width = '100%',
+  labelNumberOfLines,
 }: PrimaryButtonProps) {
   return (
     <Pressable
@@ -29,7 +31,7 @@ export function PrimaryButton({
         pressed && styles.pressed,
       ]}
     >
-      <Text style={styles.label}>{label}</Text>
+      <Text numberOfLines={labelNumberOfLines} style={styles.label}>{label}</Text>
     </Pressable>
   );
 }

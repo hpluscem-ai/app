@@ -1,5 +1,5 @@
 import type { ImagePickerAsset } from 'expo-image-picker';
-import { Image, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 
 import { colors, typography } from '../../constants/theme';
 import { CloseIcon } from '../icons/CloseIcon';
@@ -9,6 +9,7 @@ import { ReceiptIcon } from '../icons/ReceiptIcon';
 export type UploadKind = 'receipt' | 'dashboard' | 'combined';
 
 type UploadCardProps = {
+  maxHeight?: number;
   error: boolean;
   emptyLabel?: string;
   image: Pick<ImagePickerAsset, 'uri'> | null;
@@ -36,6 +37,7 @@ const uploadCopy = {
 } as const;
 
 export function UploadCard({
+  maxHeight,
   error,
   emptyLabel,
   image,
@@ -46,8 +48,14 @@ export function UploadCard({
   disabled = false,
   onImageError,
 }: UploadCardProps) {
+  const { fontScale } = useWindowDimensions();
   const copy = uploadCopy[kind];
   const label = emptyLabel ?? copy.placeholder;
+  const cardStyle = [styles.cardShadow, maxHeight === undefined ? undefined : {
+    maxHeight,
+    // Keep the existing icon and label readable when the viewport needs scrolling.
+    minHeight: styles.iconSurface.height + styles.uploadCard.gap + typography.suitSemiBold14.lineHeight * fontScale,
+  }];
 
   if (image) {
     const canPreview = Platform.OS !== 'web' && Boolean(onPreview);
@@ -63,7 +71,7 @@ export function UploadCard({
       />
     );
     return (
-      <View style={styles.cardShadow}>
+      <View style={cardStyle}>
         <View style={[styles.uploadCard, styles.selectedUploadCard]}>
           {canPreview ? (
             <Pressable
@@ -103,7 +111,7 @@ export function UploadCard({
 
   if (!onChoose) {
     return (
-      <View style={styles.cardShadow}>
+      <View style={cardStyle}>
         <View
           accessibilityLabel={
             error ? `${label}. 필수 사진이 없습니다.` : label
@@ -125,7 +133,7 @@ export function UploadCard({
   }
 
   return (
-    <View style={styles.cardShadow}>
+    <View style={cardStyle}>
       <Pressable
         accessibilityHint={
           Platform.OS === 'web'
