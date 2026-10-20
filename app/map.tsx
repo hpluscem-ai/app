@@ -190,7 +190,7 @@ export default function MapRoute() {
               {
                 id: station.id,
                 coordinate: station.coordinate,
-                label: getStationMarkerLabel(station),
+                label: station.businessName,
                 selected: sheetContent?.kind === 'station' && sheetContent.station.id === station.id,
               },
             ]
@@ -453,14 +453,6 @@ function getZoom(region: MapRegion) {
   const zoom = Math.round(Math.log2(360 / region.longitudeDelta));
 
   return Math.max(0, Math.min(20, zoom));
-}
-
-function getStationMarkerLabel(station: MapStation) {
-  const device = station.devices[0];
-
-  return device
-    ? `${device.model} / ${device.capacity}`
-    : `${station.pole} ${station.businessName}`;
 }
 
 const styles = StyleSheet.create({

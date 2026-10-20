@@ -60,14 +60,17 @@ function RootNavigator() {
     const subscription = BackHandler.addEventListener(
       'hardwareBackPress',
       () => {
+        if (pathname === '/mileage') {
+          BackHandler.exitApp();
+          return true;
+        }
+
         if (router.canGoBack()) {
           router.back();
           return true;
         }
 
-        if (pathname !== '/mileage') {
-          router.replace('/mileage');
-        }
+        router.replace('/mileage');
         return true;
       },
     );

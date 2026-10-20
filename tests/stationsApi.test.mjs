@@ -211,6 +211,28 @@ function mountMap(preserveNotice = false) {
   return page;
 }
 
+test('map marker labels use station names regardless of installed equipment', async () => {
+  for (const devices of [[{ model: 'HEUD-SELF-05', capacity: '2,500L' }], []]) {
+    const page = mountMap();
+    page.requests.at(-1).resolve([displayed('station', { businessName: '실제 주유소', devices })]);
+    await page.flush();
+    assert.equal(page.map().markers.length, 1);
+    assert.equal(page.map().markers[0].label, '실제 주유소');
+    assert.equal(page.map().markers[0].count, undefined);
+    page.unmount();
+  }
+});
+
+test('grouped map markers keep the existing station count', async () => {
+  const page = mountMap();
+  page.requests.at(-1).resolve([displayed('a'), displayed('b')]);
+  await page.flush();
+  assert.equal(page.map().markers.length, 1);
+  assert.equal(page.map().markers[0].count, 2);
+  assert.equal(page.map().markers[0].label, '');
+  page.unmount();
+});
+
 test('map ignores stale viewport, focus and session responses and preserves data on failure', async () => {
   const page = mountMap();
   const original = page.requests.at(-1);

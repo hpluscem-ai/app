@@ -1364,3 +1364,12 @@
 - 사용자 요청으로 `app.json`·`package.json` 버전을 1.0.2로 올리고 기존 Git 제외 iOS/Android 프로젝트의 표시 버전도 맞췄다. iOS Bundle ID는 `kr.hayan100.app`, Android package는 `com.hayan100.app`이다. 빌드 번호는 기존 EAS remote/production autoIncrement로 관리하며 임의의 원격 번호를 지정하지 않았다. 현재 앱 QA 수정과 릴리스 설정을 커밋 대상으로 확인했다.
 - 검증: 관련 회귀 테스트 58/58(어두운 배경 스피너 포함), 타입 검사, 공개 Expo config·로컬 네이티브 표시 버전 일치, diff 검사를 통과했다. 스피너 배경의 실제 기기 화면은 이번에도 실행하지 않았다. Expo 의존성 검사는 기존 15개 권장 패치 불일치가 남는다.
 - 실행 안내: `npx eas-cli build --platform ios --profile production --auto-submit`은 iOS production 빌드 후 EAS Submit으로 App Store Connect에 업로드한다. Apple 로그인·회사 팀 선택·서명/제출 자격 증명 설정과 Apple 처리 완료가 필요하다. 이 세션에서는 빌드·업로드·Git push를 실행하지 않았다. [Expo 공식 안내](https://docs.expo.dev/build/automate-submissions/)
+
+
+## 2026-10-21 — 지도 주유소명 표시와 Android 홈 뒤로가기 종료
+
+- 사용자 와이어프레임 승인 범위에 따라 개별 지도 마커의 첫 주입기 모델명·용량을 서버의 주유소명(`businessName`)으로 변경했다. 숫자 군집·기존 마커 크기와 말줄임·정보 시트의 설비 내용·길안내는 유지한다. 웹·iOS·Android가 같은 마커 데이터를 사용한다.
+- 로그인한 Android의 홈(`/mileage`)에서는 시스템 뒤로가기가 `BackHandler.exitApp()`을 호출한다. 다른 화면은 기존 Stack 이력이 있으면 이전 화면, 없으면 홈으로 이동한다. 네이티브 Modal의 닫힘 처리·웹·iOS 동작은 변경하지 않았다. Expo Router가 이력을 소유하며 별도 Navigator나 종료 안내 UI를 추가하지 않았다.
+- AI가 수정·검증을 수행했다. 관련 회귀 검사 24개, TypeScript 검사, 웹·Android Metro export와 diff 공백 검사를 통과했다. 새 검사는 기기 유무와 무관한 주유소명, 숫자 군집 유지, 홈의 이력 유무별 종료, 웹·iOS·미인증 상태의 비개입을 확인한다.
+- Chromium의 1440×900 데스크톱·390×844 모바일 웹에서 실제 네이버 SDK와 읽기 전용 인증·목록 fixture로 주유소명 표시·기존 28px 높이·최대 폭·페이지 오류 0건을 확인했다. 서버 세션·실데이터 연동 및 Android 실기기 종료 검증과는 구분한다. 캡처와 검사 결과는 이 세션의 `map-back-review/verified-web-desktop.png`, `verified-web-mobile.png`, `web-verification.json`에 있다.
+- 사용자 요청으로 이 수정만 커밋하고 기존 원격 main의 약관 커밋을 보존해 웹 자동 배포를 진행한다. 기존 버전·네이티브 빌드·EAS 채널·Apple 제출 설정과 이전 개발 기록의 미커밋 변경은 이번 수정 커밋에 포함하지 않는다. EAS Update 발행과 새 네이티브 바이너리 배포는 요청하지 않아 실행하지 않는다.

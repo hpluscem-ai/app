@@ -42,6 +42,7 @@ function mount({
     'expo-updates': { isEmbeddedLaunch: false, updateId: null },
     'react-native': {
       BackHandler: {
+        exitApp: () => navigation.push('exit'),
         addEventListener: (_event, listener) => {
           listeners.push(listener);
           return { remove() {} };
@@ -91,13 +92,18 @@ test('Android Back pops history, otherwise returns signed-in users to mileage', 
   const withoutHistory = mount();
   assert.equal(withoutHistory.listeners[0](), true);
   assert.deepEqual(withoutHistory.navigation, ['/mileage']);
+});
 
-  const onMileage = mount({ pathname: '/mileage' });
-  assert.equal(onMileage.listeners[0](), true);
-  assert.deepEqual(onMileage.navigation, []);
+test('Android Back exits from mileage even when navigation history remains', () => {
+  for (const canGoBack of [false, true]) {
+    const onMileage = mount({ pathname: '/mileage', canGoBack });
+    assert.equal(onMileage.listeners[0](), true);
+    assert.deepEqual(onMileage.navigation, ['exit']);
+  }
 });
 
 test('the Android fallback does not change signed-out or iOS navigation', () => {
   assert.equal(mount({ status: 'signedOut' }).listeners.length, 0);
   assert.equal(mount({ platform: 'ios' }).listeners.length, 0);
+  assert.equal(mount({ platform: 'web' }).listeners.length, 0);
 });
