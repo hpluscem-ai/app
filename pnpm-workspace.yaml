@@ -1,4 +1,15 @@
 allowBuilds:
   '@sentry/cli': true
+# Allow only the Expo versions blocked by the iOS 1.0.4 release-age check.
+minimumReleaseAgeExclude:
+  - '@expo/cli@57.0.32'
+  - '@expo/config-plugins@57.0.11'
+  - '@expo/router-server@57.0.14'
+  - '@expo/ui@57.0.26'
+  - expo-location@57.0.22
+  - expo-modules-core@57.0.24
+  - expo-modules-jsi@57.1.3
+  - expo-router@57.0.29
+  - expo@57.0.31
 patchedDependencies:
   '@mj-studio/react-native-naver-map@2.9.0': patches/@mj-studio__react-native-naver-map@2.9.0.patch

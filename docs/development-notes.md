@@ -1389,3 +1389,9 @@
 - 검증: 온라인 expo install --check의 Dependencies are up to date, TypeScript, 공개 Expo config·iOS native introspect, frozen lockfile 검사와 diff 공백 검사를 통과했다. 기존 EAS 채널/환경·Apple/iPhone/Android 설정과 빌드 명령 보존, 네이버 지도 패치의 원본 해시 및 설치된 Kotlin 코드 적용도 확인했다. 기존 자동 회귀 검사 111개가 통과했다.
 - 전체 검사 중 QA 문서 검사 1개는 docs/admin-qa.md의 UP-139 중복 ID로 실패했다. 앱 의존성 없이 커밋된 HEAD의 QA 문서·스크립트·검사만 복사한 환경에서도 같은 실패를 재현해 기존 문제임을 확인했으며 요청 범위 밖 QA 문서는 수정하지 않았다. 로그는 /private/tmp/hayan-expo57-deps/tests.tap 및 baseline-qa/result.tap에 있다.
 - AI가 의존성 갱신·설정 보완·검증을 수행했다. 기존 미커밋 변경은 보존하고 이번 의존성·폰트 플러그인·기록만 커밋한다. 사용자 지시대로 로컬/EAS 네이티브 빌드·스토어 업로드·OTA 발행·Git push는 실행하지 않았으며 Metro 번들·시뮬레이터·실기기 실행도 검증하지 않았다.
+
+## 2026-10-22 — EAS 신규 Expo 패키지 설치 대기 예외
+
+- iOS 1.0.4(10) 빌드 a55b6950-c727-42ee-9a50-05e15d94773f는 EAS의 pnpm 11.9.0이 배포 후 24시간 미만인 Expo 패키지 9개를 차단해 INSTALL_DEPENDENCIES에서 실패했다. 기존 로컬 pnpm 10.33.0 검사에는 같은 기본 제한이 없어 이 실패를 발견하지 못했다.
+- 사용자가 즉시 빌드할 수 있도록 설정 변경·커밋을 요청했다. AI는 pnpm-workspace.yaml의 minimumReleaseAgeExclude에 로그에 나온 정확한 패키지·버전 9개만 추가했다. 다른 버전과 패키지의 대기 정책, lockfile 무결성 검사, 기존 Sentry 설치 허용과 네이버 지도 패치는 유지한다. [pnpm의 특정 버전 예외 설정](https://pnpm.io/settings/dependency-resolution#minimumreleaseageexclude)을 사용하며 앱 UI·동작·의존성 버전은 변경하지 않았다.
+- 검증: 별도 임시 폴더에서 EAS와 같은 pnpm 11.9.0의 frozen 설치로 수정 전 9개 차단을 재현했다. 수정 후에는 공급망 정책 검사 613개 항목과 의존성 596개 설치 및 기존 Sentry postinstall이 통과했다. pnpm typecheck, 온라인 expo install --check, 공개 Expo config, git diff --check도 통과했다. lockfile과 기존 사용자 변경의 원본 보존을 확인했다. 증거는 /private/tmp/hayan-ios-release-age-fix-22rn2c_m/baseline.log와 updated.log에 있다. 사용자 지시대로 앱 빌드·TestFlight 제출·OTA·Git push는 실행하지 않았다.
