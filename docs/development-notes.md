@@ -1381,3 +1381,11 @@
 - 실제 조회: 기존 Expo 프로젝트 @hpluseco/hayan100 연결과 최근 iOS production 빌드 1.0.3(7)을 확인했다. 아직 production 업데이트 채널이 없음을 확인했으며 이번에는 원격 채널을 생성하거나 OTA를 발행하지 않았다. iOS production 설정의 채널 연결은 사용자가 실행할 새 EAS Build에 적용된다.
 - 검증: 1.0.4의 TypeScript·공개 Expo config·버전/업데이트 URL/채널/환경/원격 빌드 번호 설정 검사와 diff 공백 검사가 통과했다. iOS native introspect의 EXUpdatesEnabled=true·업데이트 URL·runtime 1.0.4도 확인했다. expo install --check는 기존 권장 패치 불일치 16개로 실패했으며 의존성·lockfile은 변경하지 않았다.
 - 기존 Apple 제출·iPhone 전용·Android ARM64·빌드 명령과 이전 개발 기록의 사용자 변경은 미커밋 상태로 보존한다. 이번 요청에 따른 설정과 이 기록만 커밋하며 빌드·TestFlight 업로드·EAS Update·Git push는 실행하지 않는다. 실제 OTA 수신·기기 실행은 새 빌드 설치 후 검증해야 한다.
+
+## 2026-10-22 — Expo SDK 57 의존성 정합성
+
+- 사용자가 기존 Expo 권장 버전 불일치 16개를 맞추고 커밋하도록 요청했다. Expo SDK 57을 유지하며 expo 57.0.31·@expo/ui 57.0.26·expo-updates 57.0.26·React Native 0.86.3 등 해당 16개를 공식 버전 목록에 맞춰 갱신하고 pnpm-lock.yaml을 함께 저장했다. 앱 버전과 EAS Update 런타임은 1.0.4로 유지한다.
+- 설치 과정에서 기존 자동 선택된 보조 패키지의 peer 범위 불일치가 확인돼 @expo/metro-runtime ~57.0.17·react-native-worklets 0.10.1을 직접 의존성으로, @react-native/metro-config 0.86.3을 개발 의존성으로 고정했다. 설치 후 해당 peer 경고가 사라졌다. 동적 설정을 Expo CLI가 자동 편집하지 못해 app.json에 빈 옵션의 expo-font 플러그인만 등록했으며 새 폰트·화면·사용자 문구는 추가하지 않았다.
+- 검증: 온라인 expo install --check의 Dependencies are up to date, TypeScript, 공개 Expo config·iOS native introspect, frozen lockfile 검사와 diff 공백 검사를 통과했다. 기존 EAS 채널/환경·Apple/iPhone/Android 설정과 빌드 명령 보존, 네이버 지도 패치의 원본 해시 및 설치된 Kotlin 코드 적용도 확인했다. 기존 자동 회귀 검사 111개가 통과했다.
+- 전체 검사 중 QA 문서 검사 1개는 docs/admin-qa.md의 UP-139 중복 ID로 실패했다. 앱 의존성 없이 커밋된 HEAD의 QA 문서·스크립트·검사만 복사한 환경에서도 같은 실패를 재현해 기존 문제임을 확인했으며 요청 범위 밖 QA 문서는 수정하지 않았다. 로그는 /private/tmp/hayan-expo57-deps/tests.tap 및 baseline-qa/result.tap에 있다.
+- AI가 의존성 갱신·설정 보완·검증을 수행했다. 기존 미커밋 변경은 보존하고 이번 의존성·폰트 플러그인·기록만 커밋한다. 사용자 지시대로 로컬/EAS 네이티브 빌드·스토어 업로드·OTA 발행·Git push는 실행하지 않았으며 Metro 번들·시뮬레이터·실기기 실행도 검증하지 않았다.
