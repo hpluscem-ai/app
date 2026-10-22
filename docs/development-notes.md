@@ -1373,3 +1373,11 @@
 - AI가 수정·검증을 수행했다. 관련 회귀 검사 24개, TypeScript 검사, 웹·Android Metro export와 diff 공백 검사를 통과했다. 새 검사는 기기 유무와 무관한 주유소명, 숫자 군집 유지, 홈의 이력 유무별 종료, 웹·iOS·미인증 상태의 비개입을 확인한다.
 - Chromium의 1440×900 데스크톱·390×844 모바일 웹에서 실제 네이버 SDK와 읽기 전용 인증·목록 fixture로 주유소명 표시·기존 28px 높이·최대 폭·페이지 오류 0건을 확인했다. 서버 세션·실데이터 연동 및 Android 실기기 종료 검증과는 구분한다. 캡처와 검사 결과는 이 세션의 `map-back-review/verified-web-desktop.png`, `verified-web-mobile.png`, `web-verification.json`에 있다.
 - 사용자 요청으로 이 수정만 커밋하고 기존 원격 main의 약관 커밋을 보존해 웹 자동 배포를 진행한다. 기존 버전·네이티브 빌드·EAS 채널·Apple 제출 설정과 이전 개발 기록의 미커밋 변경은 이번 수정 커밋에 포함하지 않는다. EAS Update 발행과 새 네이티브 바이너리 배포는 요청하지 않아 실행하지 않는다.
+
+## 2026-10-22 — iOS 1.0.4와 EAS Update 릴리스 설정
+
+- 사용자가 iOS 1.0.4와 TestFlight 배포를 선택한 뒤 빌드는 직접 실행하고 변경·커밋만 하도록 범위를 조정했다. AI는 app.json·package.json의 버전을 1.0.4로 맞추고, production 빌드의 EAS Update 채널과 환경을 모두 production으로 지정했다. 기존 expo-updates 의존성·업데이트 URL·runtimeVersion의 appVersion 정책 및 원격 빌드 번호 자동 증가는 유지한다.
+- package.json에 `pnpm update:ios --message "수정 내용"` 명령을 추가했다. iOS의 production 채널·production 환경에만 JS·에셋 업데이트를 발행한다. 네이티브 런타임과 OTA는 분리되므로 새 바이너리를 설치한 후 같은 1.0.4 런타임에 업데이트하며, 네이티브 의존성·설정을 바꿀 때는 버전을 올린 새 빌드가 필요하다. [SDK 57 업데이트 설정](https://docs.expo.dev/versions/v57.0.0/sdk/updates/), [EAS 환경 선택](https://docs.expo.dev/eas/environment-variables/usage/)
+- 실제 조회: 기존 Expo 프로젝트 @hpluseco/hayan100 연결과 최근 iOS production 빌드 1.0.3(7)을 확인했다. 아직 production 업데이트 채널이 없음을 확인했으며 이번에는 원격 채널을 생성하거나 OTA를 발행하지 않았다. iOS production 설정의 채널 연결은 사용자가 실행할 새 EAS Build에 적용된다.
+- 검증: 1.0.4의 TypeScript·공개 Expo config·버전/업데이트 URL/채널/환경/원격 빌드 번호 설정 검사와 diff 공백 검사가 통과했다. iOS native introspect의 EXUpdatesEnabled=true·업데이트 URL·runtime 1.0.4도 확인했다. expo install --check는 기존 권장 패치 불일치 16개로 실패했으며 의존성·lockfile은 변경하지 않았다.
+- 기존 Apple 제출·iPhone 전용·Android ARM64·빌드 명령과 이전 개발 기록의 사용자 변경은 미커밋 상태로 보존한다. 이번 요청에 따른 설정과 이 기록만 커밋하며 빌드·TestFlight 업로드·EAS Update·Git push는 실행하지 않는다. 실제 OTA 수신·기기 실행은 새 빌드 설치 후 검증해야 한다.

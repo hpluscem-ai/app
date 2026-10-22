@@ -1,6 +1,6 @@
 {
   "name": "hpluseco-app",
-  "version": "1.0.2",
+  "version": "1.0.4",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/ui": "~57.0.17",
@@ -46,6 +46,7 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "update:ios": "eas update --platform ios --channel production --environment production",
     "web": "expo start --web --port 4000",
     "qa": "node scripts/qa.mjs",
     "typecheck": "tsc --noEmit",
